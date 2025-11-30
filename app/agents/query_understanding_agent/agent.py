@@ -40,12 +40,12 @@ if __name__ == "__main__":
     async def main():
         ob = QueryUnderstandingAgent(ChatGroq(model="llama-3.1-8b-instant"))
         my_prompt = {
-            "query_text": "Explain CNN in simple terms",
+            "query_text": "what are vision transformers and explain in exam pov",
             "conversation_history": [],
             "preferences": {
                 "response_style": "detailed",
                 "max_length": 500,
-                "domain": "deep learning" 
+                "domain": "artificial intelligene" 
                 },
             "timestamp": datetime.now()
         }
