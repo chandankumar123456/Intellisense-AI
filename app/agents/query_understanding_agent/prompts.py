@@ -114,6 +114,12 @@ Output:
 }
 
 Return ONLY the JSON. Nothing else.
+IMPORTANT:
+- The `intent` field must contain EXACTLY ONE value.
+- Never combine multiple intents.
+- Never output strings like "exam | explain" or "explain/exam".
+- The value must be one of: qa, explain, summarize, compare, exam, debug, none
+
 
 """,
     template_format="jinja2",
