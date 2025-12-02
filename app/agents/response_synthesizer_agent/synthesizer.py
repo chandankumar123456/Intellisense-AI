@@ -2,11 +2,11 @@
 import time
 import hashlib
 import re
-from typing import List, Dict, Optional
+from typing import List
 from langchain_groq import ChatGroq
-from .schema import SynthesisInput, SynthesisOutput
-from .utils import estimate_tokens, sentence_tokenize, clean_text, token_overlap
-from .prompts import SYSTEM_PROMPT, INSTRUCTION_PROMPT
+from app.agents.response_synthesizer_agent.schema import SynthesisInput, SynthesisOutput
+from app.agents.response_synthesizer_agent.utils import estimate_tokens, sentence_tokenize, clean_text, token_overlap
+from app.agents.response_synthesizer_agent.prompts import SYSTEM_PROMPT, INSTRUCTION_PROMPT
 
 class ResponseSynthesizer:
     def __init__(self, llm_client: ChatGroq, token_estimator, prompts, model_config):
