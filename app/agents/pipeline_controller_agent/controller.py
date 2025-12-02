@@ -1,11 +1,11 @@
 # app/agents/pipeline_controller_agent/controller.py
-from query_understanding_agent.agent import QueryUnderstandingAgent
-from retrieval_agent.orchestrator import RetrievalOrchestratorAgent
-from response_synthesizer_agent.synthesizer import ResponseSynthesizer
+from app.agents.query_understanding_agent.agent import QueryUnderstandingAgent
+from app.agents.retrieval_agent.orchestrator import RetrievalOrchestratorAgent
+from app.agents.response_synthesizer_agent.synthesizer import ResponseSynthesizer
 
-from query_understanding_agent.schema import QueryUnderstandingInput, QueryUnderstandingOutput
-from retrieval_agent.schema import RetrievalInput, RetrievalOutput
-from response_synthesizer_agent.schema import SynthesisInput, SynthesisOutput
+from app.agents.query_understanding_agent.schema import QueryUnderstandingInput, QueryUnderstandingOutput
+from app.agents.retrieval_agent.schema import RetrievalInput, RetrievalOutput
+from app.agents.response_synthesizer_agent.schema import SynthesisInput, SynthesisOutput
 
 from .controller_config import (
     DEFAULT_RETRIEVERS,
