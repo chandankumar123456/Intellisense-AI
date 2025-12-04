@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Header, HTTPException
+from fastapi import Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from pydantic import BaseModel
 
 from app.core.auth_utils import create_jwt_token, decode_jwt_token
 from app.core.user_store import create_user, authenticate_user
 
+security = HTTPBearer()
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 class SignupRequest(BaseModel):
@@ -48,15 +51,13 @@ async def login(payload: LoginRequest):
         token = token
     )
     
+    
 @router.get("/me")
-async def get_me(authorization: str = Header(None)):
-    if not authorization:
-        raise HTTPException(401, "Missing token")
-    
-    token = authorization.replace("Bearer ", "")
+async def get_me(credentials: HTTPAuthorizationCredentials = Security(security)):
+    token = credentials.credentials
     decoded = decode_jwt_token(token)
-    
+
     if not decoded:
-        raise HTTPException(401, "Invalid token")
-    
+        raise HTTPException(status_code=401, detail="Invalid token")
+
     return decoded

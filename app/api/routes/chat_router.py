@@ -1,5 +1,6 @@
 # app/api/routes/chat_router.py
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.core.redis_client import redis_client
 
@@ -26,7 +27,7 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 
 import time
-
+bearer_scheme = HTTPBearer()
 def ensure_valid_session(user_id: str, session_id: str):
     key = f"session:{session_id}"
     
@@ -88,15 +89,11 @@ def get_pipeline_controller() -> PipelineControllerAgent:
 
 @router.post("/query")
 async def chat_query(request: ChatRequest, 
-                     authorization: str = Header(None),
+                     credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
                      controller: PipelineControllerAgent = Depends(get_pipeline_controller)
                     ) -> ChatResponse:
-    try:
-        
-        if not authorization:
-            raise HTTPException(401, "Missing auth token")
-        
-        token = authorization.replace("Bearer ", "")
+    try:    
+        token = credentials.credentials
         decoded = decode_jwt_token(token)
         
         if not decoded:
