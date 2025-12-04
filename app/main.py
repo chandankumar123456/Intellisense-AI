@@ -3,7 +3,11 @@
 import uuid
 import time
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Security
+from fastapi.security import APIKeyHeader
+from fastapi.openapi.models import APIKey, APIKeyIn
+from fastapi.openapi.utils import get_openapi
+
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,11 +16,17 @@ from app.api.routes.session import router as session_router
 from app.api.routes.auth_router import router as auth_router
 
 from app.core.logging import log_info, log_error
-
+auth_scheme = APIKeyHeader(name="Authorization", auto_error=False)
 app = FastAPI(
     title="Notebook LM - Agentic RAG Backend",
     version="1.0.0",
-    description="Backend powering Query Understanding -> Retrieval -> Response Synthesis"
+    description="Backend powering Query Understanding -> Retrieval -> Response Synthesis",
+    swagger_ui_init_oauth={},
+    openapi_tags=[
+        {"name": "auth", "description": "Authentication"},
+        {"name": "session", "description": "Session Manager"},
+        {"name": "chat", "description": "Query understanding -> Retrieval -> Response Synthesis"}
+    ]
 )
 
 
@@ -31,6 +41,34 @@ app.add_middleware(
 app.include_router(chat_router)
 app.include_router(session_router)
 app.include_router(auth_router)
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title="Notebook LM - Agentic RAG Backend",
+        version="1.0.0",
+        description="Backend powering Query Understanding → Retrieval → Response Synthesis",
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT"
+        }
+    }
+
+    # Apply JWT globally to protected routes
+    for route in openapi_schema["paths"].values():
+        for method in route.values():
+            method["security"] = [{"BearerAuth": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):
