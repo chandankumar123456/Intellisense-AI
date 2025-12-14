@@ -296,3 +296,8 @@ all_react_files.txt
 copy_all_contents.py
 *.md
 !README.md
+
+# Temporary scripts (may contain secrets)
+replace-secret.sh
+fix-env.sh
+*.sh
