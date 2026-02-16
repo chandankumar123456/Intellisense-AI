@@ -24,6 +24,7 @@ const WebSourcesPage = lazy(() => import('./pages/WebSourcesPage'));
 const YouTubePage = lazy(() => import('./pages/YouTubePage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const ClaimValidationPage = lazy(() => import('./pages/ClaimValidationPage'));
 
 function App() {
   return (
@@ -67,6 +68,7 @@ function App() {
                       <Route path="history" element={<HistoryPage />} />
                       <Route path="web" element={<WebSourcesPage />} />
                       <Route path="youtube" element={<YouTubePage />} />
+                      <Route path="verification" element={<ClaimValidationPage />} />
                       <Route path="settings" element={<SettingsPage />} />
                     </Route>
 

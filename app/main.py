@@ -3,6 +3,7 @@
 import uuid
 import time
 
+# Trigger reload
 from fastapi import FastAPI, Request, Security
 from fastapi.security import APIKeyHeader
 from fastapi.openapi.models import APIKey, APIKeyIn
@@ -14,6 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.chat_router import router as chat_router
 from app.api.routes.session import router as session_router
 from app.api.routes.auth_router import router as auth_router
+from app.api.routes.verification_router import router as verification_router
+from app.api.routes.ingestion_router import router as ingestion_router
 
 from app.core.logging import log_info, log_error
 auth_scheme = APIKeyHeader(name="Authorization", auto_error=False)
@@ -25,7 +28,8 @@ app = FastAPI(
     openapi_tags=[
         {"name": "auth", "description": "Authentication"},
         {"name": "session", "description": "Session Manager"},
-        {"name": "chat", "description": "Query understanding -> Retrieval -> Response Synthesis"}
+        {"name": "chat", "description": "Query understanding -> Retrieval -> Response Synthesis"},
+        {"name": "ingestion", "description": "File and URL Ingestion"}
     ]
 )
 
@@ -41,6 +45,8 @@ app.add_middleware(
 app.include_router(chat_router)
 app.include_router(session_router)
 app.include_router(auth_router)
+app.include_router(verification_router)
+app.include_router(ingestion_router)
 
 def custom_openapi():
     if app.openapi_schema:

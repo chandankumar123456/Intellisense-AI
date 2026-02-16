@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useChat } from '../../contexts/ChatContext';
 import {
   Home,
   MessageSquare,
@@ -9,6 +10,8 @@ import {
   Settings,
   Menu,
   X,
+  ShieldCheck,
+  PlusCircle,
 } from 'lucide-react';
 
 interface NavItem {
@@ -23,11 +26,13 @@ const navItems: NavItem[] = [
   { icon: Clock, label: 'History', path: '/app/history' },
   { icon: Globe, label: 'Web', path: '/app/web' },
   { icon: Youtube, label: 'YouTube', path: '/app/youtube' },
+  { icon: ShieldCheck, label: 'Verification', path: '/app/verification' },
   { icon: Settings, label: 'Settings', path: '/app/settings' },
 ];
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
+  const { clearHistory } = useChat();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -91,18 +96,32 @@ const Sidebar: React.FC = () => {
       >
         <div className="p-4">
           <div className="flex items-center justify-between mb-8">
-            <Link
-              to="/app/home"
-              className={`block ${isCollapsed ? 'mx-auto' : ''}`}
-            >
-              <h2
-                className={`text-2xl font-bold text-primary ${
-                  isCollapsed ? 'text-xl' : ''
-                }`}
+            <div className="flex items-center gap-2">
+              <Link
+                to="/app/home"
+                className={`block ${isCollapsed ? 'mx-auto' : ''}`}
               >
-                {isCollapsed ? 'NL' : 'Notebook LM'}
-              </h2>
-            </Link>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-xl">
+                    IA
+                  </div>
+                  {!isCollapsed && (
+                    <h2 className="text-2xl font-bold text-primary">
+                      Intellisense AI
+                    </h2>
+                  )}
+                </div>
+              </Link>
+              {!isCollapsed && (
+                <button
+                  onClick={clearHistory}
+                  className="p-2 ml-2 hover:bg-slate-100 rounded-full text-text_secondary transition-colors"
+                  title="New Chat"
+                >
+                  <PlusCircle className="w-5 h-5" />
+                </button>
+              )}
+            </div>
             {!isCollapsed && (
               <button
                 onClick={toggleCollapse}
@@ -126,10 +145,9 @@ const Sidebar: React.FC = () => {
                   className={`
                     flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-200
                     ${isCollapsed ? 'justify-center' : ''}
-                    ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-600 font-medium'
-                        : 'text-text_secondary hover:bg-surface hover:text-text_primary'
+                    ${isActive
+                      ? 'bg-blue-50 text-blue-600 font-medium'
+                      : 'text-text_secondary hover:bg-surface hover:text-text_primary'
                     }
                   `}
                   aria-current={isActive ? 'page' : undefined}

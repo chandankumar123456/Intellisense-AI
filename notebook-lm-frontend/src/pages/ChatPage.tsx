@@ -74,7 +74,7 @@ const ChatPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="h-full overflow-y-auto" ref={messagesEndRef}>
+            <div className="h-full overflow-y-auto px-2">
               {memoizedMessages.map((message) => (
                 <div key={message.id} className="mb-4">
                   <ChatMessage message={message} />

@@ -15,6 +15,7 @@ const defaultPreferences: ChatPreferences = {
   allow_agentic: false,
 };
 
+
 // Initial state
 const getInitialState = (): ChatState => {
   const savedPreferences = Storage.getPreferences();
@@ -26,6 +27,9 @@ const getInitialState = (): ChatState => {
     activeTab: 'myfiles',
     preferences: savedPreferences || defaultPreferences,
     sessionId: null,
+    files: [],
+    webSources: [],
+    youtubeSources: [],
   };
 };
 
@@ -39,7 +43,13 @@ type ChatAction =
   | { type: 'SET_ACTIVE_TAB'; payload: ChatState['activeTab'] }
   | { type: 'UPDATE_PREFERENCES'; payload: Partial<ChatPreferences> }
   | { type: 'SET_SESSION_ID'; payload: string | null }
-  | { type: 'CLEAR_HISTORY' };
+  | { type: 'CLEAR_HISTORY' }
+  | { type: 'ADD_FILE'; payload: any }
+  | { type: 'REMOVE_FILE'; payload: string }
+  | { type: 'ADD_WEB_SOURCE'; payload: string }
+  | { type: 'REMOVE_WEB_SOURCE'; payload: string }
+  | { type: 'ADD_YOUTUBE_SOURCE'; payload: string }
+  | { type: 'REMOVE_YOUTUBE_SOURCE'; payload: string };
 
 // Reducer
 const chatReducer = (state: ChatState, action: ChatAction): ChatState => {
@@ -74,6 +84,20 @@ const chatReducer = (state: ChatState, action: ChatAction): ChatState => {
     case 'CLEAR_HISTORY':
       Storage.removeMessages();
       return { ...state, messages: [], currentQuery: '' };
+    case 'ADD_FILE':
+      return { ...state, files: [...state.files, action.payload] };
+    case 'REMOVE_FILE':
+      return { ...state, files: state.files.filter(f => f.id !== action.payload) };
+    case 'ADD_WEB_SOURCE':
+      if (state.webSources.includes(action.payload)) return state;
+      return { ...state, webSources: [...state.webSources, action.payload] };
+    case 'REMOVE_WEB_SOURCE':
+      return { ...state, webSources: state.webSources.filter(s => s !== action.payload) };
+    case 'ADD_YOUTUBE_SOURCE':
+      if (state.youtubeSources.includes(action.payload)) return state;
+      return { ...state, youtubeSources: [...state.youtubeSources, action.payload] };
+    case 'REMOVE_YOUTUBE_SOURCE':
+      return { ...state, youtubeSources: state.youtubeSources.filter(s => s !== action.payload) };
     default:
       return state;
   }
@@ -179,6 +203,81 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     dispatch({ type: 'SET_CURRENT_QUERY', payload: query });
   };
 
+  const addFile = async (file: File): Promise<void> => {
+    if (!user) return;
+
+    const tempId = `file-${Date.now()}`;
+    // Add optimistic update
+    const newFile: any = {
+      id: tempId,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      status: 'uploading' as const,
+    };
+    dispatch({ type: 'ADD_FILE', payload: newFile });
+
+    try {
+      const response = await ChatService.ingestFile(file, user.user_id);
+
+      // Update file with real ID and status
+      // We need a way to update a specific file in the list. 
+      // Current reducer only has ADD/REMOVE. 
+      // For now, I'll remove the temp one and add the "complete" one with the doc ID.
+      // Better way: Update reducer to support UPDATE_FILE_STATUS, but this works for now.
+
+      dispatch({ type: 'REMOVE_FILE', payload: tempId });
+
+      const completedFile = {
+        ...newFile,
+        id: response.document_id,
+        status: 'complete' as const,
+      };
+      dispatch({ type: 'ADD_FILE', payload: completedFile });
+
+    } catch (error) {
+      console.error('File upload failed:', error);
+      dispatch({ type: 'REMOVE_FILE', payload: tempId });
+      // Ideally show error toast
+      const errorFile = { ...newFile, status: 'error' as const };
+      dispatch({ type: 'ADD_FILE', payload: errorFile });
+    }
+  };
+
+  const removeFile = (fileId: string): void => {
+    dispatch({ type: 'REMOVE_FILE', payload: fileId });
+  };
+
+  const addWebSource = async (url: string): Promise<void> => {
+    if (!user) return;
+    try {
+      dispatch({ type: 'ADD_WEB_SOURCE', payload: url });
+      await ChatService.ingestUrl(url, 'web', user.user_id);
+    } catch (error) {
+      console.error("Failed to ingest web source:", error);
+      dispatch({ type: 'REMOVE_WEB_SOURCE', payload: url });
+    }
+  };
+
+  const removeWebSource = (url: string): void => {
+    dispatch({ type: 'REMOVE_WEB_SOURCE', payload: url });
+  };
+
+  const addYouTubeSource = async (url: string): Promise<void> => {
+    if (!user) return;
+    try {
+      dispatch({ type: 'ADD_YOUTUBE_SOURCE', payload: url });
+      await ChatService.ingestUrl(url, 'youtube', user.user_id);
+    } catch (error) {
+      console.error("Failed to ingest YouTube source:", error);
+      dispatch({ type: 'REMOVE_YOUTUBE_SOURCE', payload: url });
+    }
+  };
+
+  const removeYouTubeSource = (url: string): void => {
+    dispatch({ type: 'REMOVE_YOUTUBE_SOURCE', payload: url });
+  };
+
   const value: ChatContextType = {
     ...state,
     sendMessage,
@@ -186,6 +285,12 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     clearHistory,
     setActiveTab,
     setCurrentQuery,
+    addFile,
+    removeFile,
+    addWebSource,
+    removeWebSource,
+    addYouTubeSource,
+    removeYouTubeSource,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
@@ -199,3 +304,4 @@ export const useChat = (): ChatContextType => {
   }
   return context;
 };
+

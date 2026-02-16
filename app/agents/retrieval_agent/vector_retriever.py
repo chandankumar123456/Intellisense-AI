@@ -31,18 +31,23 @@ class VectorRetriever:
                 return []
             
             for hit in hits:
+                # Try fields first (Serverless Inference), then metadata (Standard)
                 chunk_text = hit.get('fields', {}).get("text")
+                if not chunk_text:
+                    chunk_text = hit.get('metadata', {}).get("chunk_text") # Fallback to standard metadata
+                    
                 if not chunk_text:
                     log_warning(f"Hit missing 'text' field: {hit.get('_id', 'unknown')}")
                     continue
+                
                 chunk = Chunk(
                     chunk_id= hit.get('_id', ''),
-                    document_id=hit.get('fields', {}).get('doc_id', ''),
-                    source_type= hit.get('fields', {}).get('source_type', 'note'),
+                    document_id=hit.get('fields', {}).get('doc_id') or hit.get('metadata', {}).get('doc_id', ''),
+                    source_type= hit.get('fields', {}).get('source_type') or hit.get('metadata', {}).get('source_type', 'note'),
                     raw_score=hit.get('_score', 0.0),
                     text = chunk_text,
-                    metadata = hit.get('fields', {}).get("category"),
-                    source_url = hit.get('fields', {}).get('source_url')
+                    metadata = hit.get('fields', {}).get("category") or hit.get('metadata', {}).get("category"),
+                    source_url = hit.get('fields', {}).get('source_url') or hit.get('metadata', {}).get('source_url')
                 )
                 chunk_list.append(chunk)
                 

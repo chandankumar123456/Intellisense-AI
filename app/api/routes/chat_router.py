@@ -45,60 +45,8 @@ router = APIRouter(prefix="/v1/chat",
                    tags=["chat (Notebook LM)"]
                    )
 
-pipeline_controller: PipelineControllerAgent = None
-
-def get_pipeline_controller() -> PipelineControllerAgent:
-    global pipeline_controller
-
-    if pipeline_controller is None:
-        # Load .env file with encoding fallback
-        try:
-            load_dotenv()
-        except UnicodeDecodeError:
-            # Try UTF-16 encoding (common on Windows)
-            try:
-                load_dotenv(encoding='utf-16')
-            except Exception:
-                # Try UTF-16 with BOM
-                try:
-                    load_dotenv(encoding='utf-16-le')
-                except Exception:
-                    # If all encodings fail, continue without .env file
-                    pass
-
-        vector_client = VectorRetriever(index)
-        keyword_client = KeywordRetriever("app/agents/retrieval_agent/keyword_index.json")
-        llm_client = ChatGroq(model="llama-3.1-8b-instant")
-
-        q_agent = QueryUnderstandingAgent(llm_client)
-        retrieval_agent = RetrievalOrchestratorAgent(
-            vector_retriever=vector_client,
-            keyword_retriever=keyword_client
-        )
-        model_config = ModelConfig(
-            model_name="llama-3.1-8b-instant",
-            max_context_tokens=128000      # adjust to model's limit
-        )
-
-        prompts = {
-            "system": SYSTEM_PROMPT,
-            "instruction": INSTRUCTION_PROMPT
-        }
-
-        res_agent = ResponseSynthesizer(
-            llm_client=llm_client,
-            token_estimator=estimate_tokens,
-            prompts=prompts,
-            model_config=model_config
-        )
-
-        pipeline_controller = PipelineControllerAgent(
-            q_agent,
-            retrieval_agent,
-            res_agent
-        )
-
-    return pipeline_controller
+# Import shared dependency
+from app.api.dependencies import get_pipeline_controller
 
 @router.post("/query")
 async def chat_query(

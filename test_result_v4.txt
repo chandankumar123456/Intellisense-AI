@@ -1,0 +1,21 @@
+1. Signing up user 'test_evilearn_9ac8bcde'...
+SUCCESS: User created (ID: b80a857b-ceb0-41e1-8814-c972f68d1f78)
+
+2. Verifying content...
+SUCCESS: Verification result received!
+
+--- Summary ---
+None
+
+--- Claims ---
+Claim: Mitochondria is the powerhouse of the cell.
+Status: Unsupported (0.0)
+Explanation: The evidence does not contain information relevant to the claim about mitochondria being the powerhouse of the cell.
+--------------------
+Claim: The Earth is flat.
+Status: Unsupported (0.0)
+Explanation: The evidence does not contain information to prove or disprove the claim that the Earth is flat, as it discusses the Pacific Ocean and Mount Everest without addressing the shape of the Earth.
+--------------------
+
+--- Detailed Report ---
+None

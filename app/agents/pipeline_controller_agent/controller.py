@@ -18,6 +18,15 @@ from app.agents.retrieval_agent.schema import (
 
 from app.agents.response_synthesizer_agent.schema import SynthesisInput, SynthesisOutput
 
+# EviLearn Imports
+from app.agents.claim_extraction_agent.agent import ClaimExtractionAgent
+from app.agents.claim_extraction_agent.schema import ClaimExtractionInput
+from app.agents.verification_agent.agent import VerificationAgent
+from app.agents.verification_agent.schema import VerificationInput
+from app.agents.explanation_agent.agent import ExplanationAgent
+from app.agents.explanation_agent.schema import ExplanationInput
+
+
 from .controller_config import (
     DEFAULT_RETRIEVERS,
     DEFAULT_MODEL_NAME,
@@ -31,6 +40,9 @@ import time
 import datetime
 from typing import List, Dict, Any
 from dotenv import load_dotenv
+from app.core.logging import log_info, log_error
+from typing import List, Dict, Any
+from dotenv import load_dotenv
 
 
 class PipelineControllerAgent:
@@ -38,7 +50,10 @@ class PipelineControllerAgent:
         self,
         query_understander: QueryUnderstandingAgent,
         retriever_orchestrator: RetrievalOrchestratorAgent,
-        response_synthesizer: ResponseSynthesizer
+        response_synthesizer: ResponseSynthesizer,
+        claim_extractor: ClaimExtractionAgent = None,
+        verifier: VerificationAgent = None,
+        explainer: ExplanationAgent = None
     ):
         # Load .env file with encoding fallback
         try:
@@ -57,6 +72,9 @@ class PipelineControllerAgent:
         self.query_understander = query_understander
         self.retriever_orchestrator = retriever_orchestrator
         self.response_synthesizer = response_synthesizer
+        self.claim_extractor = claim_extractor
+        self.verifier = verifier
+        self.explainer = explainer
 
         self.default_retrievers = DEFAULT_RETRIEVERS
         self.default_model = DEFAULT_MODEL_NAME
@@ -228,3 +246,91 @@ class PipelineControllerAgent:
         }
 
         return final_payload
+
+    async def run_verification_flow(
+        self,
+        text: str,
+        user_id: str,
+        session_id: str,
+        preferences: Preferences = None
+    ) -> Dict[str, Any]:
+        """
+        Orchestrates the Claim Verification Flow (EviLearn).
+        """
+        log_info(f"Starting Verification Flow for user={user_id}")
+        start_time = time.time()
+        
+        # 1. Claim Extraction
+        log_info("Step 1: Extracting Claims...")
+        extraction_output = await self.claim_extractor.run(ClaimExtractionInput(text=text))
+        claims = extraction_output.claims
+        log_info(f"Extracted {len(claims)} claims.")
+        
+        verified_claims = []
+        
+        # 2. Verification Loop
+        log_info("Step 2: Verifying Claims...")
+        for claim in claims:
+            # 2a. Retrieval for this claim
+            # We use a constructed query based on the claim
+            retrieval_query = f"Verify claim: {claim.claim_text}"
+            
+            # Using defaults for retrieval params if not provided
+            # Logic similar to run() but simplified for single claim
+            retrieval_params = RetrievalParams_RetrievalAgent(
+                top_k_vector=3,
+                top_k_keyword=2, # focus on precision
+                top_k_web=0,
+                top_k_youtube=0
+            )
+
+            retrieval_input = RetrievalInput(
+                user_id=user_id,
+                session_id=session_id,
+                rewritten_query=retrieval_query,
+                retrievers_to_use=["vector", "keyword"],
+                retrieval_params=retrieval_params,
+                conversation_history=[],
+                preferences=preferences if preferences else Preferences(response_style="concise", max_length=300, domain="general")
+            )
+            
+            retrieval_output = await self.retriever_orchestrator.run(retrieval_input)
+            chunks = [c.text for c in retrieval_output.chunks]
+            
+            # 2b. Verification
+            verification_input = VerificationInput(
+                claim_text=claim.claim_text,
+                retrieved_chunks=chunks  # Passing text content
+            )
+            verification_output = await self.verifier.run(verification_input)
+            
+            verified_claims.append({
+                "claim_text": claim.claim_text,
+                "original_text": claim.original_text_segment,
+                "status": verification_output.result.status,
+                "confidence": verification_output.result.confidence_score,
+                "explanation": verification_output.result.explanation,
+                "evidence_chunks": retrieval_output.chunks # Store full chunk objects for frontend reference
+            })
+            
+        # 3. Explanation Generation
+        # 3. Explanation Generation
+        log_info("Step 3: Generating Explanation...")
+        try:
+            explanation_output = await self.explainer.run(ExplanationInput(claims_with_verification=verified_claims))
+            summary = explanation_output.summary
+            detailed_report = explanation_output.detailed_report
+        except Exception as e:
+            log_error(f"Explanation failed: {e}")
+            summary = "Could not generate summary."
+            detailed_report = "Could not generate report."
+        
+        latency_ms = int((time.time() - start_time) * 1000)
+        
+        return {
+            "verified_claims": verified_claims,
+            "summary": summary,
+            "detailed_report": detailed_report,
+            "latency_ms": latency_ms
+        }
+

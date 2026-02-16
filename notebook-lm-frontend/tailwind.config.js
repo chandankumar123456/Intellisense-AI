@@ -6,17 +6,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#3B82F6',
-        primary_dark: '#2563EB',
-        secondary: '#64748B',
+        primary: '#6366f1', // Indigo 500
+        primary_dark: '#4f46e5', // Indigo 600
+        secondary: '#8b5cf6', // Violet 500
         success: '#10B981',
         warning: '#F59E0B',
         error: '#EF4444',
-        background: '#FFFFFF',
-        surface: '#F9FAFB',
-        border: '#E5E7EB',
-        text_primary: '#111827',
-        text_secondary: '#6B7280',
+        background: '#f8fafc', // Slate 50
+        surface: '#ffffff',
+        border: '#e2e8f0', // Slate 200
+        text_primary: '#0f172a', // Slate 900
+        text_secondary: '#64748b', // Slate 500
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

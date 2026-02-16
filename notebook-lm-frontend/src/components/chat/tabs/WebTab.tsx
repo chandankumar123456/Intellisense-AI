@@ -2,26 +2,27 @@ import React, { useState } from 'react';
 import { Globe, Plus, Trash2 } from 'lucide-react';
 import Button from '../../common/Button';
 import Input from '../../common/Input';
+import { useChat } from '../../../contexts/ChatContext';
 
 const WebTab: React.FC = () => {
+  const { webSources, addWebSource, removeWebSource } = useChat();
   const [url, setUrl] = useState('');
-  const [sources, setSources] = useState<string[]>([]);
 
   const handleAdd = () => {
     if (url.trim()) {
-      setSources([...sources, url.trim()]);
+      addWebSource(url.trim());
       setUrl('');
     }
   };
 
-  const handleRemove = (index: number) => {
-    setSources(sources.filter((_, i) => i !== index));
+  const handleRemove = (source: string) => {
+    removeWebSource(source);
   };
 
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-text_primary">Web Sources</h3>
-      
+
       <div className="flex gap-2">
         <Input
           type="url"
@@ -36,7 +37,7 @@ const WebTab: React.FC = () => {
         </Button>
       </div>
 
-      {sources.length === 0 ? (
+      {webSources.length === 0 ? (
         <div className="text-center py-8 text-text_secondary">
           <Globe className="w-12 h-12 mx-auto mb-4 text-text_secondary/50" />
           <p>No web sources added</p>
@@ -44,7 +45,7 @@ const WebTab: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-2">
-          {sources.map((source, index) => (
+          {webSources.map((source, index) => (
             <div
               key={index}
               className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border"
@@ -58,7 +59,7 @@ const WebTab: React.FC = () => {
                 {source}
               </a>
               <button
-                onClick={() => handleRemove(index)}
+                onClick={() => handleRemove(source)}
                 className="ml-2 p-1 text-error hover:bg-error/10 rounded"
                 aria-label="Remove source"
               >

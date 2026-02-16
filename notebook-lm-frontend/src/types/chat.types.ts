@@ -24,6 +24,14 @@ export interface ChatPreferences {
   allow_agentic: boolean;
 }
 
+export interface UploadedFile {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  status: 'uploading' | 'complete' | 'error';
+}
+
 export interface ChatState {
   messages: Message[];
   currentQuery: string;
@@ -31,6 +39,9 @@ export interface ChatState {
   activeTab: 'myfiles' | 'web' | 'youtube' | 'preferences';
   preferences: ChatPreferences;
   sessionId: string | null;
+  files: UploadedFile[];
+  webSources: string[];
+  youtubeSources: string[];
 }
 
 export interface ChatContextType extends ChatState {
@@ -39,6 +50,12 @@ export interface ChatContextType extends ChatState {
   clearHistory: () => void;
   setActiveTab: (tab: ChatState['activeTab']) => void;
   setCurrentQuery: (query: string) => void;
+  addFile: (file: File) => Promise<void>;
+  removeFile: (fileId: string) => void;
+  addWebSource: (url: string) => void;
+  removeWebSource: (url: string) => void;
+  addYouTubeSource: (url: string) => void;
+  removeYouTubeSource: (url: string) => void;
 }
 
 export interface SourceTab {
