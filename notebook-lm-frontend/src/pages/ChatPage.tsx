@@ -1,111 +1,114 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useChat } from '../contexts/ChatContext';
-import ChatMessage from '../components/chat/ChatMessage';
 import ChatInput from '../components/chat/ChatInput';
-import RetrievalTracePanel from '../components/chat/RetrievalTracePanel';
-import SourceTabs from '../components/chat/SourceTabs';
-import { Search } from 'lucide-react';
-import Input from '../components/common/Input';
-import { useDebounce } from '../hooks/useDebounce';
+import ChatMessage from '../components/chat/ChatMessage';
+import { SourceTabBar, SourcePanel } from '../components/chat/SourceTabs';
+import { MessageSquare, Sparkles } from 'lucide-react';
+
+const suggestions = [
+  'Summarize my uploaded documents',
+  'What are the key findings?',
+  'Explain the methodology used',
+  'Compare the main arguments',
+];
 
 const ChatPage: React.FC = () => {
-  const {
-    messages,
-    currentQuery,
-    isLoading,
-    activeTab,
-    sendMessage,
-    setActiveTab,
-    setCurrentQuery,
-  } = useChat();
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  // Debounced query for future search functionality
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const debouncedQuery = useDebounce(currentQuery, 300);
+  const { messages, sendMessage, isLoading } = useChat();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState('files');
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
-  // Memoize message list to prevent unnecessary re-renders
-  const memoizedMessages = useMemo(() => messages, [messages]);
-
-  const handleSend = async (query: string) => {
-    await sendMessage(query);
+  const handleTogglePanel = (tab: string) => {
+    if (isPanelOpen && activeTab === tab) { setIsPanelOpen(false); return; }
+    setActiveTab(tab); setIsPanelOpen(true);
   };
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      {/* Search bar */}
-      <div className="border-b border-border bg-white p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-text_secondary" />
-            <Input
-              type="text"
-              value={currentQuery}
-              onChange={(e) => setCurrentQuery(e.target.value)}
-              placeholder="Search your knowledge base..."
-              className="pl-10"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSend(currentQuery);
-                }
-              }}
+    <div className="flex h-full overflow-hidden">
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-normal ${isPanelOpen ? 'lg:mr-panel' : ''}`}>
+        {/* Toolbar — liquid glass, responsive padding */}
+        <div
+          className="px-3 sm:px-5 flex items-center justify-between liquid-glass-header flex-shrink-0"
+          style={{ minHeight: '48px' }}
+        >
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <MessageSquare className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium text-text_secondary z-content">Chat</span>
+          </div>
+          <div className="overflow-x-auto">
+            <SourceTabBar
+              activeTab={activeTab}
+              isPanelOpen={isPanelOpen}
+              onTogglePanel={handleTogglePanel}
             />
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 sm:p-5 scroll-smooth">
+          <div className="max-w-3xl mx-auto space-y-4 sm:space-y-5">
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full min-h-[300px] sm:min-h-[400px] gap-5 sm:gap-6 px-2">
+                {/* Liquid glass orb */}
+                <div
+                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center animate-float liquid-glass"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--hover-glow), var(--active-glow))',
+                    boxShadow: '0 12px 48px var(--hover-glow)',
+                  }}
+                >
+                  <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 text-primary z-content" />
+                </div>
+                <div className="text-center">
+                  <h2 className="text-lg sm:text-xl font-semibold text-text_primary mb-2">Start a conversation</h2>
+                  <p className="text-xs sm:text-sm text-text_muted max-w-md leading-relaxed">
+                    Ask questions about your documents, or explore topics with AI-powered retrieval.
+                  </p>
+                </div>
+
+                {/* Suggestion chips — liquid glass cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg mt-2">
+                  {suggestions.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => sendMessage(s)}
+                      className="text-left card group relative z-content"
+                      style={{ minHeight: '48px' }}
+                    >
+                      <span className="text-sm text-text_secondary group-hover:text-text_primary transition-colors duration-fast z-content relative">{s}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              messages.map((msg, i) => (
+                <ChatMessage key={msg.id || i} message={msg} />
+              ))
+            )}
+
+            {isLoading && (
+              <div className="flex gap-1.5 items-center pl-2 py-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-liquid-dot-1" />
+                <div className="w-2.5 h-2.5 rounded-full bg-secondary animate-liquid-dot-2" />
+                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-liquid-dot-3" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Input — responsive bottom padding */}
+        <div className="px-3 sm:px-5 pb-3 sm:pb-5 pb-safe flex-shrink-0">
+          <div className="max-w-3xl mx-auto">
+            <ChatInput onSendMessage={sendMessage} isLoading={isLoading} />
           </div>
         </div>
       </div>
 
-      {/* Source tabs */}
-      <SourceTabs activeTab={activeTab} onTabChange={setActiveTab} />
-
-      {/* Messages */}
-      <div className="flex-1 overflow-hidden p-4">
-        <div className="max-w-4xl mx-auto h-full">
-          {messages.length === 0 && !isLoading ? (
-            <div className="text-center py-12">
-              <h2 className="text-2xl font-semibold text-text_primary mb-2">
-                Start a conversation
-              </h2>
-              <p className="text-text_secondary">
-                Ask a question or search your knowledge base to get started
-              </p>
-            </div>
-          ) : (
-            <div className="h-full overflow-y-auto px-2">
-              {memoizedMessages.map((message) => (
-                <div key={message.id} className="mb-4">
-                  <ChatMessage message={message} />
-                  {message.role === 'assistant' && message.metadata?.retrieval_trace && (
-                    <RetrievalTracePanel
-                      trace={message.metadata.retrieval_trace}
-                      confidence={message.metadata.confidence}
-                      latency={message.metadata.latency_ms}
-                    />
-                  )}
-                </div>
-              ))}
-              {isLoading && (
-                <div className="flex justify-start mb-4">
-                  <div className="message-assistant">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-text_secondary rounded-full animate-pulse" />
-                      <div className="w-2 h-2 bg-text_secondary rounded-full animate-pulse delay-75" />
-                      <div className="w-2 h-2 bg-text_secondary rounded-full animate-pulse delay-150" />
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Input */}
-      <ChatInput onSend={handleSend} isLoading={isLoading} />
+      <SourcePanel activeTab={activeTab} isOpen={isPanelOpen} onClose={() => setIsPanelOpen(false)} />
     </div>
   );
 };

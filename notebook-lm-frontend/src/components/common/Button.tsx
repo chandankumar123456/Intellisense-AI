@@ -1,4 +1,5 @@
 import React from 'react';
+import { Loader2 } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger';
@@ -7,6 +8,12 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
 }
 
+const sizeMap = {
+  sm: { className: 'px-4 py-2 text-xs', minHeight: '36px', iconSize: 'w-3.5 h-3.5' },
+  md: { className: 'px-5 py-2.5 text-sm', minHeight: '42px', iconSize: 'w-4 h-4' },
+  lg: { className: 'px-7 py-3.5 text-base', minHeight: '48px', iconSize: 'w-4 h-4' },
+};
+
 const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
   size = 'md',
@@ -14,57 +21,66 @@ const Button: React.FC<ButtonProps> = ({
   children,
   className = '',
   disabled,
+  style,
   ...props
 }) => {
-  const baseClasses = 'font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
-  
-  const variantClasses = {
-    primary: 'bg-primary hover:bg-primary_dark text-white focus:ring-primary',
-    secondary: 'bg-surface hover:bg-gray-100 text-text_primary border border-border focus:ring-primary',
-    danger: 'bg-error hover:bg-red-600 text-white focus:ring-error',
-  };
+  const sz = sizeMap[size];
 
-  const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-base',
-    lg: 'px-6 py-3 text-lg',
-  };
+  if (variant === 'primary') {
+    return (
+      <button
+        className={`btn-primary-liquid ${sz.className} ${className}`}
+        disabled={disabled || isLoading}
+        style={{ minHeight: sz.minHeight, ...style }}
+        {...props}
+      >
+        {isLoading && <Loader2 className={`${sz.iconSize} animate-spin z-content relative`} />}
+        <span className="z-content relative">{children}</span>
+      </button>
+    );
+  }
 
-  const classes = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`;
+  if (variant === 'danger') {
+    return (
+      <button
+        className={`btn-liquid ${sz.className} ${className}`}
+        style={{
+          minHeight: sz.minHeight,
+          background: 'rgba(239, 68, 68, 0.08)',
+          borderColor: 'rgba(239, 68, 68, 0.15)',
+          color: '#EF4444',
+          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.06)',
+          ...style,
+        }}
+        disabled={disabled || isLoading}
+        onMouseEnter={(e) => {
+          if (!disabled) {
+            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.14)';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
+          e.currentTarget.style.transform = 'translateY(0)';
+        }}
+        {...props}
+      >
+        {isLoading && <Loader2 className={`${sz.iconSize} animate-spin z-content relative`} />}
+        <span className="z-content relative">{children}</span>
+      </button>
+    );
+  }
 
+  // Secondary
   return (
     <button
-      className={classes}
+      className={`btn-liquid ${sz.className} ${className}`}
       disabled={disabled || isLoading}
+      style={{ minHeight: sz.minHeight, ...style }}
       {...props}
     >
-      {isLoading ? (
-        <span className="flex items-center justify-center">
-          <svg
-            className="animate-spin -ml-1 mr-2 h-4 w-4"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-          Loading...
-        </span>
-      ) : (
-        children
-      )}
+      {isLoading && <Loader2 className={`${sz.iconSize} animate-spin z-content relative`} />}
+      <span className="z-content relative">{children}</span>
     </button>
   );
 };

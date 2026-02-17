@@ -1,4 +1,4 @@
-// API Types for Notebook LM Frontend
+// API Types for IntelliSense AI Frontend
 
 export interface User {
   user_id: string;

@@ -303,3 +303,12 @@ copy_all_contents.py
 replace-secret.sh
 fix-env.sh
 *.sh
+
+
+test_*.py
+test_evilearn_flow.py
+test_result_v2.txt
+test_result_v3.txt
+test_result_v4.txt
+test_result_v5.txt
+test_result.txt

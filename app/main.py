@@ -17,19 +17,21 @@ from app.api.routes.session import router as session_router
 from app.api.routes.auth_router import router as auth_router
 from app.api.routes.verification_router import router as verification_router
 from app.api.routes.ingestion_router import router as ingestion_router
+from app.api.routes.evilearn_router import router as evilearn_router
 
 from app.core.logging import log_info, log_error
 auth_scheme = APIKeyHeader(name="Authorization", auto_error=False)
 app = FastAPI(
-    title="Notebook LM - Agentic RAG Backend",
-    version="1.0.0",
-    description="Backend powering Query Understanding -> Retrieval -> Response Synthesis",
+    title="IntelliSense AI — Hybrid Agentic RAG Backend",
+    version="2.0.0",
+    description="Backend powering Query Understanding -> Retrieval -> Response Synthesis + EviLearn Verification",
     swagger_ui_init_oauth={},
     openapi_tags=[
         {"name": "auth", "description": "Authentication"},
         {"name": "session", "description": "Session Manager"},
         {"name": "chat", "description": "Query understanding -> Retrieval -> Response Synthesis"},
-        {"name": "ingestion", "description": "File and URL Ingestion"}
+        {"name": "ingestion", "description": "File and URL Ingestion"},
+        {"name": "evilearn", "description": "EviLearn: Hybrid Verification & Storage-Efficient RAG"},
     ]
 )
 
@@ -47,6 +49,7 @@ app.include_router(session_router)
 app.include_router(auth_router)
 app.include_router(verification_router)
 app.include_router(ingestion_router)
+app.include_router(evilearn_router)
 
 def custom_openapi():
     if app.openapi_schema:

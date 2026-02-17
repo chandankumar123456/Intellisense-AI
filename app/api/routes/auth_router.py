@@ -1,3 +1,4 @@
+# app/api/routes/auth_router.py
 from fastapi import APIRouter, Header, HTTPException
 from fastapi import Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer

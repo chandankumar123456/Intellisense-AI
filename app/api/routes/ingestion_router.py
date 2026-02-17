@@ -1,3 +1,4 @@
+# app/api/routes/ingestion_router.py
 from fastapi import APIRouter, UploadFile, File, HTTPException, Body, BackgroundTasks, Form
 from pydantic import BaseModel
 from typing import List, Optional
@@ -115,19 +116,21 @@ async def process_and_index(text: str, source_url: str, source_type: str, user_i
         if records:
             log_info(f"Upserting {len(records)} chunks for {source_url}...")
             
-            # Using the exact same structure as utils.py intended
-            # We will use the 'index' object from utils which is a Pinecone Index.
-            # We construct vector objects for upsert.
+            # Generate embeddings client-side using SentenceTransformer
+            from app.agents.retrieval_agent.utils import embed_text
             
+            chunk_texts = [r["chunk_text"] for r in records]
+            try:
+                embeddings = await asyncio.to_thread(embed_text, chunk_texts)
+            except Exception as e:
+                log_error(f"Embedding generation failed: {e}")
+                raise
+
             vectors = []
-            for r in records:
+            for i, r in enumerate(records):
                 vectors.append({
                     "id": r["_id"],
-                    "values": [0.0] * 1024, # Placeholder, as proper embedding will happen if configured, or this is a fallback
-                    # Wait, if we send 0.0s, and it's an embedding index, it might overwrite?
-                    # If `create_index_for_model` was used, we should use the Inference API pattern.
-                    # BUT `utils.py` init code `pc.create_index_for_model` sets `field_map`.
-                    # This implies we MUST provide the text in the metadata field `chunk_text`.
+                    "values": embeddings[i], 
                     "metadata": {
                         "chunk_text": r["chunk_text"],
                         "source_type": r["source_type"],

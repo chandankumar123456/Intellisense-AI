@@ -1,87 +1,75 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { X } from 'lucide-react';
-import Button from './Button';
 
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
-  showCloseButton?: boolean;
+  size?: 'sm' | 'md' | 'lg';
 }
 
-const Modal: React.FC<ModalProps> = ({
-  isOpen,
-  onClose,
-  title,
-  children,
-  size = 'md',
-  showCloseButton = true,
-}) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md' }) => {
+  const handleEscape = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
   useEffect(() => {
     if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
       document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
     }
-
     return () => {
-      document.body.style.overflow = 'unset';
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = '';
     };
-  }, [isOpen]);
-
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
+  }, [isOpen, handleEscape]);
 
   if (!isOpen) return null;
 
-  const sizeClasses = {
-    sm: 'max-w-md',
-    md: 'max-w-lg',
+  const sizeClasses: Record<string, string> = {
+    sm: 'max-w-sm',
+    md: 'max-w-md',
     lg: 'max-w-2xl',
-    xl: 'max-w-4xl',
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-fade-in"
+      style={{
+        background: 'rgba(0,0,0,0.15)',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+      }}
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? 'modal-title' : undefined}
     >
       <div
-        className={`bg-white rounded-lg shadow-xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-hidden flex flex-col`}
+        className={`w-full ${sizeClasses[size]} max-h-[85vh] sm:max-h-[90vh] overflow-hidden flex flex-col rounded-glass animate-scale-in liquid-glass-elevated`}
         onClick={(e) => e.stopPropagation()}
       >
-        {(title || showCloseButton) && (
-          <div className="flex items-center justify-between p-6 border-b border-border">
-            {title && (
-              <h2 id="modal-title" className="text-xl font-semibold text-text_primary">
-                {title}
-              </h2>
-            )}
-            {showCloseButton && (
-              <button
-                onClick={onClose}
-                className="ml-auto p-2 text-text_secondary hover:text-text_primary transition-colors"
-                aria-label="Close modal"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
+        {title && (
+          <div className="flex items-center justify-between p-4 sm:p-5 pb-0 z-content relative flex-shrink-0">
+            <h2 id="modal-title" className="text-base sm:text-lg font-semibold text-text_primary pr-4">{title}</h2>
+            <button
+              onClick={onClose}
+              className="flex items-center justify-center rounded-glass-sm transition-all duration-fast active:scale-[0.92] flex-shrink-0"
+              style={{
+                width: '36px', height: '36px',
+                background: 'transparent',
+                color: 'var(--text-muted)',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover-glow)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              aria-label="Close modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
         )}
-        <div className="flex-1 overflow-y-auto p-6">{children}</div>
+        <div className="p-4 sm:p-5 overflow-y-auto z-content relative">{children}</div>
       </div>
     </div>
   );

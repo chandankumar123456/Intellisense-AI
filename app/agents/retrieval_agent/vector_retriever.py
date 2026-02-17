@@ -12,42 +12,47 @@ class VectorRetriever:
     async def search(self, query: str, top_k: int) -> List[Chunk]:
         try:
             log_info(f"Vector search: query='{query}', top_k={top_k}")
+            
+            # Embed query client-side
+            from app.agents.retrieval_agent.utils import embed_text
+            try:
+                query_vector = await asyncio.to_thread(embed_text, [query])
+                query_vector = query_vector[0] # Extract first vector
+            except Exception as e:
+                log_error(f"Query embedding failed: {e}")
+                return []
+
+            # Use standard Pinecone query
             results = await asyncio.to_thread(
-                self.vector_db_client.search,
+                self.vector_db_client.query,
                 namespace=namespace,
-                query={
-                    "top_k": top_k, 
-                    "inputs": {
-                        "text": query
-                        }
-                    }
+                vector=query_vector,
+                top_k=top_k,
+                include_metadata=True
             )
 
             chunk_list = []
-            hits = results.get('result', {}).get('hits', [])
+            matches = results.get('matches', [])
             
-            if not hits:
+            if not matches:
                 log_warning(f"Vector search returned no results for query: '{query}'")
                 return []
             
-            for hit in hits:
-                # Try fields first (Serverless Inference), then metadata (Standard)
-                chunk_text = hit.get('fields', {}).get("text")
+            for match in matches:
+                chunk_text = match.get('metadata', {}).get("chunk_text")
+                
                 if not chunk_text:
-                    chunk_text = hit.get('metadata', {}).get("chunk_text") # Fallback to standard metadata
-                    
-                if not chunk_text:
-                    log_warning(f"Hit missing 'text' field: {hit.get('_id', 'unknown')}")
+                    log_warning(f"Match missing 'chunk_text' in metadata: {match.get('id', 'unknown')}")
                     continue
                 
                 chunk = Chunk(
-                    chunk_id= hit.get('_id', ''),
-                    document_id=hit.get('fields', {}).get('doc_id') or hit.get('metadata', {}).get('doc_id', ''),
-                    source_type= hit.get('fields', {}).get('source_type') or hit.get('metadata', {}).get('source_type', 'note'),
-                    raw_score=hit.get('_score', 0.0),
+                    chunk_id= match.get('id', ''),
+                    document_id=match.get('metadata', {}).get('doc_id', ''),
+                    source_type= match.get('metadata', {}).get('source_type', 'note'),
+                    raw_score=match.get('score', 0.0),
                     text = chunk_text,
-                    metadata = hit.get('fields', {}).get("category") or hit.get('metadata', {}).get("category"),
-                    source_url = hit.get('fields', {}).get('source_url') or hit.get('metadata', {}).get('source_url')
+                    metadata = match.get('metadata', {}).get("category"),
+                    source_url = match.get('metadata', {}).get('source_url')
                 )
                 chunk_list.append(chunk)
                 
@@ -57,4 +62,6 @@ class VectorRetriever:
             return chunk_list
         except Exception as e:
             log_error(f"Vector search failed: {str(e)}", trace_id=None)
+            import traceback
+            log_error(traceback.format_exc())
             return []

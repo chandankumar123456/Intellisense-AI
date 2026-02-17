@@ -14,15 +14,12 @@ const Input: React.FC<InputProps> = ({
   id,
   ...props
 }) => {
-  const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
+  const inputId = id || `input-${label?.toLowerCase().replace(/\s+/g, '-')}`;
 
   return (
     <div className="w-full">
       {label && (
-        <label
-          htmlFor={inputId}
-          className="block text-sm font-medium text-text_primary mb-1"
-        >
+        <label htmlFor={inputId} className="block text-sm font-medium text-text_secondary mb-1.5">
           {label}
         </label>
       )}
@@ -33,16 +30,8 @@ const Input: React.FC<InputProps> = ({
         aria-describedby={error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined}
         {...props}
       />
-      {error && (
-        <p id={`${inputId}-error`} className="mt-1 text-sm text-error" role="alert">
-          {error}
-        </p>
-      )}
-      {helperText && !error && (
-        <p id={`${inputId}-helper`} className="mt-1 text-sm text-text_secondary">
-          {helperText}
-        </p>
-      )}
+      {error && <p id={`${inputId}-error`} className="mt-1 text-xs text-error" role="alert">{error}</p>}
+      {helperText && !error && <p id={`${inputId}-helper`} className="mt-1 text-xs text-text_muted">{helperText}</p>}
     </div>
   );
 };

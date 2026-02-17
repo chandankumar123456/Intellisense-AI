@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { Youtube, Plus, Trash2 } from 'lucide-react';
-import Button from '../../common/Button';
-import Input from '../../common/Input';
 import { useChat } from '../../../contexts/ChatContext';
 
 const YouTubeTab: React.FC = () => {
@@ -9,61 +7,84 @@ const YouTubeTab: React.FC = () => {
   const [url, setUrl] = useState('');
 
   const handleAdd = () => {
-    if (url.trim()) {
-      addYouTubeSource(url.trim());
-      setUrl('');
-    }
+    if (url.trim()) { addYouTubeSource(url.trim()); setUrl(''); }
   };
 
-  const handleRemove = (video: string) => {
-    removeYouTubeSource(video);
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleAdd();
   };
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-text_primary">YouTube Videos</h3>
+      <h3 className="text-sm font-semibold text-text_primary">YouTube Videos</h3>
 
-      <div className="flex gap-2">
-        <Input
+      {/* Input + Button — aligned row */}
+      <div className="flex items-stretch gap-2">
+        <input
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://www.youtube.com/watch?v=..."
-          className="flex-1"
+          onKeyDown={handleKeyDown}
+          placeholder="https://youtube.com/watch?v=..."
+          className="input-field flex-1"
+          style={{ minHeight: '42px', fontSize: '13px' }}
+          aria-label="YouTube video URL"
         />
-        <Button variant="primary" onClick={handleAdd}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add
-        </Button>
+        <button
+          onClick={handleAdd}
+          disabled={!url.trim()}
+          className="btn-primary-liquid flex-shrink-0"
+          style={{ minHeight: '42px', padding: '0 16px', fontSize: '13px' }}
+          aria-label="Add YouTube video"
+        >
+          <Plus className="w-4 h-4 z-content relative" />
+          <span className="z-content relative">Add</span>
+        </button>
       </div>
 
       {youtubeSources.length === 0 ? (
-        <div className="text-center py-8 text-text_secondary">
-          <Youtube className="w-12 h-12 mx-auto mb-4 text-text_secondary/50" />
-          <p>No YouTube videos added</p>
-          <p className="text-sm mt-2">Add video URLs to index and search their content</p>
+        <div className="text-center py-8">
+          <Youtube className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+          <p className="text-sm text-text_secondary">No YouTube videos added</p>
+          <p className="text-xs text-text_muted mt-1.5">Add video URLs to index and search their content</p>
         </div>
       ) : (
         <div className="space-y-2">
           {youtubeSources.map((video, index) => (
             <div
               key={index}
-              className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border"
+              className="flex items-center justify-between rounded-glass-sm group"
+              style={{
+                padding: '10px 12px',
+                minHeight: '42px',
+                background: 'var(--glass-surface)',
+                border: '1px solid var(--border-subtle)',
+              }}
             >
               <a
                 href={video}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-primary hover:text-primary_dark flex-1 truncate"
+                className="text-xs flex-1 truncate transition-colors"
+                style={{ color: 'var(--accent-primary)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-primary-dark)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--accent-primary)'; }}
               >
                 {video}
               </a>
               <button
-                onClick={() => handleRemove(video)}
-                className="ml-2 p-1 text-error hover:bg-error/10 rounded"
+                onClick={() => removeYouTubeSource(video)}
+                className="ml-2 flex items-center justify-center rounded-glass-sm transition-all duration-fast flex-shrink-0 active:scale-[0.9]"
+                style={{
+                  width: '32px', height: '32px',
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = '#EF4444'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
                 aria-label="Remove video"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           ))}

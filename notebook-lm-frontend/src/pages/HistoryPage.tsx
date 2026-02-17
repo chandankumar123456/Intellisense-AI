@@ -2,8 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { Clock, Trash2, MessageSquare, Search } from 'lucide-react';
 import { useChat } from '../contexts/ChatContext';
 import { Storage } from '../utils/storage';
-import Button from '../components/common/Button';
-import Input from '../components/common/Input';
 import ChatMessage from '../components/chat/ChatMessage';
 import { Message } from '../types/chat.types';
 
@@ -21,13 +19,11 @@ const HistoryPage: React.FC = () => {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Load conversations from storage
   React.useEffect(() => {
     const saved = Storage.getConversationHistory();
     if (saved) {
       setConversations(saved);
     } else if (messages.length > 0) {
-      // Create conversation from current messages
       const conversation: Conversation = {
         id: `conv-${Date.now()}`,
         title: messages[0]?.content.substring(0, 50) || 'New Conversation',
@@ -40,10 +36,8 @@ const HistoryPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filter conversations by search query
   const filteredConversations = useMemo(() => {
     if (!searchQuery.trim()) return conversations;
-    
     return conversations.filter((conv) =>
       conv.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       conv.messages.some((msg) =>
@@ -56,10 +50,7 @@ const HistoryPage: React.FC = () => {
     const updated = conversations.filter((conv) => conv.id !== id);
     setConversations(updated);
     Storage.setConversationHistory(updated);
-    
-    if (selectedConversation === id) {
-      setSelectedConversation(null);
-    }
+    if (selectedConversation === id) setSelectedConversation(null);
   };
 
   const handleClearAll = () => {
@@ -77,119 +68,126 @@ const HistoryPage: React.FC = () => {
   }, [selectedConversation, conversations]);
 
   return (
-    <div className="p-8 h-full flex flex-col">
-      <div className="max-w-7xl mx-auto w-full flex-1 flex gap-6">
+    <div className="p-4 sm:p-6 lg:p-8 h-full flex flex-col" style={{ background: 'var(--bg-primary)' }}>
+      <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col lg:flex-row gap-4 sm:gap-6 min-h-0">
         {/* Conversations List */}
-        <div className="w-80 flex-shrink-0 flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Clock className="w-6 h-6 text-primary" />
-              <h1 className="text-2xl font-bold text-text_primary">History</h1>
+        <div className="w-full lg:w-80 lg:flex-shrink-0 flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-glass-sm flex items-center justify-center flex-shrink-0"
+                style={{ background: 'var(--hover-glow)', border: '1px solid var(--focus-ring)' }}
+              >
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: 'var(--accent-primary)' }} />
+              </div>
+              <h1 className="text-lg sm:text-xl font-semibold text-text_primary tracking-tight">History</h1>
             </div>
             {conversations.length > 0 && (
-              <Button
-                variant="danger"
-                size="sm"
+              <button
                 onClick={handleClearAll}
+                className="btn-liquid flex-shrink-0"
+                style={{
+                  minHeight: '36px', padding: '6px 14px', fontSize: '12px',
+                  background: 'rgba(239,68,68,0.06)', borderColor: 'rgba(239,68,68,0.12)',
+                  color: '#EF4444',
+                }}
                 aria-label="Clear all history"
               >
-                <Trash2 className="w-4 h-4" />
-              </Button>
+                <Trash2 className="w-3.5 h-3.5 z-content relative" />
+                <span className="z-content relative hidden sm:inline">Clear</span>
+              </button>
             )}
           </div>
 
           {/* Search */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text_secondary" />
-              <Input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search conversations..."
-                className="pl-10"
-              />
-            </div>
+          <div className="mb-3 sm:mb-4 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search conversations..."
+              className="input-field pl-10"
+              style={{ minHeight: '42px', fontSize: '13px' }}
+            />
           </div>
 
           {/* Conversations */}
-          <div className="flex-1 overflow-y-auto space-y-2">
+          <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
             {filteredConversations.length === 0 ? (
-              <div className="text-center py-8 text-text_secondary">
-                <MessageSquare className="w-12 h-12 mx-auto mb-4 text-text_secondary/50" />
-                <p>No conversations found</p>
-                {searchQuery && (
-                  <p className="text-sm mt-2">Try a different search term</p>
-                )}
+              <div className="text-center py-8">
+                <MessageSquare className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+                <p className="text-sm text-text_secondary">No conversations found</p>
+                {searchQuery && <p className="text-xs text-text_muted mt-1.5">Try a different search term</p>}
               </div>
             ) : (
-              filteredConversations.map((conversation) => (
-                <div
-                  key={conversation.id}
-                  className={`
-                    p-4 rounded-lg border cursor-pointer transition-colors
-                    ${
-                      selectedConversation === conversation.id
-                        ? 'border-primary bg-blue-50'
-                        : 'border-border hover:border-primary/50'
-                    }
-                  `}
-                  onClick={() => setSelectedConversation(conversation.id)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-medium text-text_primary line-clamp-2">
-                      {conversation.title}
-                    </h3>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteConversation(conversation.id);
-                      }}
-                      className="ml-2 p-1 text-error hover:bg-error/10 rounded"
-                      aria-label="Delete conversation"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+              filteredConversations.map((conversation) => {
+                const isSelected = selectedConversation === conversation.id;
+                return (
+                  <div
+                    key={conversation.id}
+                    className="rounded-glass-sm cursor-pointer group transition-all duration-fast"
+                    onClick={() => setSelectedConversation(conversation.id)}
+                    style={{
+                      padding: '12px 14px',
+                      minHeight: '48px',
+                      background: isSelected ? 'var(--hover-glow)' : 'var(--glass-surface)',
+                      border: `1px solid ${isSelected ? 'var(--focus-ring)' : 'var(--border-subtle)'}`,
+                      boxShadow: isSelected ? '0 2px 12px var(--hover-glow)' : 'none',
+                    }}
+                    onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--glass-elevated)'; }}
+                    onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--glass-surface)'; }}
+                    role="button"
+                    aria-selected={isSelected}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <h3 className="font-medium text-sm text-text_primary line-clamp-2 leading-snug">{conversation.title}</h3>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conversation.id); }}
+                        className="flex items-center justify-center rounded-glass-sm transition-all duration-fast flex-shrink-0 opacity-0 group-hover:opacity-100 active:scale-[0.9]"
+                        style={{ width: '28px', height: '28px', background: 'transparent', color: 'var(--text-muted)' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = '#EF4444'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                        aria-label="Delete conversation"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <p className="text-[11px] text-text_muted">{conversation.messages.length} messages</p>
+                      <p className="text-[11px] text-text_muted">{new Date(conversation.updatedAt).toLocaleDateString()}</p>
+                    </div>
                   </div>
-                  <p className="text-xs text-text_secondary">
-                    {conversation.messages.length} messages
-                  </p>
-                  <p className="text-xs text-text_secondary mt-1">
-                    {new Date(conversation.updatedAt).toLocaleDateString()}
-                  </p>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
 
         {/* Messages View */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           {selectedMessages ? (
             <>
-              <div className="mb-4 pb-4 border-b border-border">
-                <h2 className="text-xl font-semibold text-text_primary">
+              <div
+                className="mb-3 sm:mb-4 pb-3 sm:pb-4 flex-shrink-0"
+                style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              >
+                <h2 className="text-base sm:text-lg font-semibold text-text_primary">
                   {conversations.find((c) => c.id === selectedConversation)?.title}
                 </h2>
               </div>
               <div className="flex-1 overflow-y-auto space-y-4">
                 {selectedMessages.map((message) => (
-                  <div key={message.id}>
-                    <ChatMessage message={message} />
-                  </div>
+                  <div key={message.id}><ChatMessage message={message} /></div>
                 ))}
               </div>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <MessageSquare className="w-16 h-16 mx-auto mb-4 text-text_secondary/50" />
-                <h2 className="text-xl font-semibold text-text_primary mb-2">
-                  Select a conversation
-                </h2>
-                <p className="text-text_secondary">
-                  Choose a conversation from the list to view its messages
-                </p>
+              <div className="text-center px-4">
+                <MessageSquare className="w-12 h-12 sm:w-14 sm:h-14 mx-auto mb-3 sm:mb-4" style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
+                <h2 className="text-base sm:text-lg font-semibold text-text_primary mb-1.5">Select a conversation</h2>
+                <p className="text-xs sm:text-sm text-text_muted">Choose a conversation from the list to view its messages</p>
               </div>
             </div>
           )}

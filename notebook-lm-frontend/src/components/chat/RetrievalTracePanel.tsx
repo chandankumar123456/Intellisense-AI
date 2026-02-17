@@ -1,129 +1,81 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
-import { RetrievalTrace } from '../../types/api.types';
+import { ChevronDown, ChevronUp, Activity, Zap, Clock } from 'lucide-react';
 
 interface RetrievalTracePanelProps {
-  trace: RetrievalTrace | null;
+  trace: any;
   confidence?: number;
   latency?: number;
 }
 
-const RetrievalTracePanel: React.FC<RetrievalTracePanelProps> = ({
-  trace,
-  confidence,
-  latency,
-}) => {
+const RetrievalTracePanel: React.FC<RetrievalTracePanelProps> = ({ trace, confidence, latency }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  if (!trace) {
-    return null;
-  }
-
-  const getConfidenceColor = (conf: number) => {
-    if (conf >= 0.7) return 'text-success';
-    if (conf >= 0.4) return 'text-warning';
-    return 'text-error';
-  };
-
-  const getConfidenceLabel = (conf: number) => {
-    if (conf >= 0.7) return 'High';
-    if (conf >= 0.4) return 'Medium';
-    return 'Low';
-  };
+  if (!trace) return null;
 
   return (
-    <div className="border border-border rounded-lg bg-surface mt-4">
+    <div
+      className="rounded-glass mt-3 overflow-hidden transition-all duration-normal liquid-glass"
+      style={{ boxShadow: '0 4px 12px var(--glass-shadow)' }}
+    >
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between p-3 z-content relative transition-all duration-fast"
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover-glow)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         aria-expanded={isExpanded}
         aria-label="Toggle retrieval trace details"
       >
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-text_primary">Retrieval Trace</span>
+        <div className="flex items-center gap-2">
+          <Activity className="w-3.5 h-3.5 text-primary" />
+          <span className="text-xs font-medium text-text_secondary">Retrieval Trace</span>
+        </div>
+        <div className="flex items-center gap-3">
           {confidence !== undefined && (
-            <span className={`text-sm font-medium ${getConfidenceColor(confidence)}`}>
-              Confidence: {getConfidenceLabel(confidence)} ({Math.round(confidence * 100)}%)
-            </span>
+            <div className="flex items-center gap-1.5">
+              <div className={`w-1.5 h-1.5 rounded-full ${confidence > 0.7 ? 'bg-success' : confidence > 0.4 ? 'bg-warning' : 'bg-error'
+                }`} />
+              <span className="text-[10px] text-text_muted">{Math.round(confidence * 100)}%</span>
+            </div>
           )}
           {latency && (
-            <span className="text-xs text-text_secondary">Latency: {latency}ms</span>
+            <div className="flex items-center gap-1">
+              <Clock className="w-3 h-3 text-text_muted" />
+              <span className="text-[10px] text-text_muted">{latency}ms</span>
+            </div>
           )}
+          {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-text_muted" /> : <ChevronDown className="w-3.5 h-3.5 text-text_muted" />}
         </div>
-        {isExpanded ? (
-          <ChevronUp className="w-4 h-4 text-text_secondary" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-text_secondary" />
-        )}
       </button>
 
       {isExpanded && (
-        <div className="p-4 border-t border-border space-y-3">
-          <div>
-            <p className="text-xs font-medium text-text_secondary mb-1">Trace ID</p>
-            <p className="text-sm text-text_primary font-mono">{trace.trace_id}</p>
-          </div>
-
-          <div>
-            <p className="text-xs font-medium text-text_secondary mb-1">Query</p>
-            <p className="text-sm text-text_primary">{trace.query}</p>
-          </div>
-
-          <div>
-            <p className="text-xs font-medium text-text_secondary mb-2">Retrievers Used</p>
-            <div className="flex flex-wrap gap-2">
-              {trace.retrievers_used.map((retriever, index) => (
-                <span
-                  key={index}
-                  className="px-2 py-1 bg-primary/10 text-primary text-xs rounded"
-                >
-                  {retriever}
+        <div className="p-4 space-y-3 animate-fade-in z-content relative" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+          {trace.retrievers && Object.entries(trace.retrievers).map(([name, data]: [string, any]) => (
+            <div key={name} className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-text_secondary flex items-center gap-1.5">
+                  <Zap className="w-3 h-3 text-primary" />{name}
                 </span>
-              ))}
+                {data.num_results !== undefined && (
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-pill" style={{ background: 'var(--hover-glow)', color: 'var(--accent-primary)' }}>
+                    {data.num_results} results
+                  </span>
+                )}
+              </div>
+              {data.results?.length > 0 && (
+                <div className="grid gap-1.5 ml-6">
+                  {data.results.map((result: any, idx: number) => (
+                    <div key={idx} className="px-3 py-2 rounded-glass-sm text-xs" style={{ background: 'var(--glass-surface)', border: '1px solid var(--border-subtle)' }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-text_secondary truncate">{result.source || `Result ${idx + 1}`}</span>
+                        {result.score !== undefined && <span className="text-text_muted ml-2 flex-shrink-0">{(result.score * 100).toFixed(0)}%</span>}
+                      </div>
+                      {result.content && <p className="text-text_muted truncate">{result.content.substring(0, 100)}...</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            {trace.results.vector && (
-              <div>
-                <p className="text-xs font-medium text-text_secondary mb-1">Vector Retrieval</p>
-                <p className="text-sm text-text_primary">
-                  {trace.results.vector.count}/{trace.results.vector.top_k} top-k
-                </p>
-                <p className="text-xs text-text_secondary">{trace.results.vector.status}</p>
-              </div>
-            )}
-
-            {trace.results.keyword && (
-              <div>
-                <p className="text-xs font-medium text-text_secondary mb-1">Keyword Retrieval</p>
-                <p className="text-sm text-text_primary">
-                  {trace.results.keyword.count}/{trace.results.keyword.top_k} top-k
-                </p>
-                <p className="text-xs text-text_secondary">{trace.results.keyword.status}</p>
-              </div>
-            )}
-
-            {trace.results.web && (
-              <div>
-                <p className="text-xs font-medium text-text_secondary mb-1">Web Retrieval</p>
-                <p className="text-sm text-text_primary">
-                  {trace.results.web.count}/{trace.results.web.top_k} top-k
-                </p>
-                <p className="text-xs text-text_secondary">{trace.results.web.status}</p>
-              </div>
-            )}
-
-            {trace.results.youtube && (
-              <div>
-                <p className="text-xs font-medium text-text_secondary mb-1">YouTube Retrieval</p>
-                <p className="text-sm text-text_primary">
-                  {trace.results.youtube.count}/{trace.results.youtube.top_k} top-k
-                </p>
-                <p className="text-xs text-text_secondary">{trace.results.youtube.status}</p>
-              </div>
-            )}
-          </div>
+          ))}
         </div>
       )}
     </div>

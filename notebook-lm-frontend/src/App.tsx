@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'react-hot-toast';
 
 // Contexts
+import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { SessionProvider } from './contexts/SessionContext';
 import { ChatProvider } from './contexts/ChatContext';
@@ -28,84 +29,90 @@ const ClaimValidationPage = lazy(() => import('./pages/ClaimValidationPage'));
 
 function App() {
   return (
-    <ErrorBoundary>
-      <AuthProvider>
-        <SessionProvider>
-          <ChatProvider>
-            <Router>
-              <a
-                href="#main-content"
-                className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-white focus:rounded-lg"
-              >
-                Skip to main content
-              </a>
-              <div className="min-h-screen bg-background" id="main-content">
-                <Suspense
-                  fallback={
-                    <div className="min-h-screen flex items-center justify-center">
-                      <LoadingSpinner size="lg" />
-                    </div>
-                  }
+    <ThemeProvider>
+      <ErrorBoundary>
+        <AuthProvider>
+          <SessionProvider>
+            <ChatProvider>
+              <Router>
+                <a
+                  href="#main-content"
+                  className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-white focus:rounded-lg"
                 >
-                  <Routes>
-                    {/* Public routes */}
-                    <Route path="/" element={<LandingPage />} />
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/signup" element={<SignupPage />} />
+                  Skip to main content
+                </a>
+                <div className="min-h-screen bg-background" id="main-content">
+                  <Suspense
+                    fallback={
+                      <div className="min-h-screen flex items-center justify-center">
+                        <LoadingSpinner size="lg" />
+                      </div>
+                    }
+                  >
+                    <Routes>
+                      {/* Public routes */}
+                      <Route path="/" element={<LandingPage />} />
+                      <Route path="/login" element={<LoginPage />} />
+                      <Route path="/signup" element={<SignupPage />} />
 
-                    {/* Protected routes */}
-                    <Route
-                      path="/app"
-                      element={
-                        <ProtectedRoute>
-                          <AppLayout />
-                        </ProtectedRoute>
-                      }
-                    >
-                      <Route index element={<Navigate to="/app/chat" replace />} />
-                      <Route path="home" element={<HomePage />} />
-                      <Route path="chat" element={<ChatPage />} />
-                      <Route path="history" element={<HistoryPage />} />
-                      <Route path="web" element={<WebSourcesPage />} />
-                      <Route path="youtube" element={<YouTubePage />} />
-                      <Route path="verification" element={<ClaimValidationPage />} />
-                      <Route path="settings" element={<SettingsPage />} />
-                    </Route>
+                      {/* Protected routes */}
+                      <Route
+                        path="/app"
+                        element={
+                          <ProtectedRoute>
+                            <AppLayout />
+                          </ProtectedRoute>
+                        }
+                      >
+                        <Route index element={<Navigate to="/app/chat" replace />} />
+                        <Route path="home" element={<HomePage />} />
+                        <Route path="chat" element={<ChatPage />} />
+                        <Route path="history" element={<HistoryPage />} />
+                        <Route path="web" element={<WebSourcesPage />} />
+                        <Route path="youtube" element={<YouTubePage />} />
+                        <Route path="verification" element={<ClaimValidationPage />} />
+                        <Route path="settings" element={<SettingsPage />} />
+                      </Route>
 
-                    {/* 404 Not Found */}
-                    <Route path="*" element={<NotFoundPage />} />
-                  </Routes>
-                </Suspense>
-              </div>
-              <Toaster
-                position="top-right"
-                toastOptions={{
-                  duration: 4000,
-                  style: {
-                    background: '#363636',
-                    color: '#fff',
-                  },
-                  success: {
-                    duration: 3000,
-                    iconTheme: {
-                      primary: '#10B981',
-                      secondary: '#fff',
+                      {/* 404 Not Found */}
+                      <Route path="*" element={<NotFoundPage />} />
+                    </Routes>
+                  </Suspense>
+                </div>
+                <Toaster
+                  position="top-right"
+                  toastOptions={{
+                    duration: 4000,
+                    style: {
+                      background: 'var(--toast-bg)',
+                      color: 'var(--toast-text)',
+                      backdropFilter: 'blur(12px)',
+                      borderRadius: '14px',
+                      border: '1px solid var(--glass-edge)',
+                      boxShadow: '0 8px 32px var(--glass-shadow)',
                     },
-                  },
-                  error: {
-                    duration: 5000,
-                    iconTheme: {
-                      primary: '#EF4444',
-                      secondary: '#fff',
+                    success: {
+                      duration: 3000,
+                      iconTheme: {
+                        primary: '#10B981',
+                        secondary: '#fff',
+                      },
                     },
-                  },
-                }}
-              />
-            </Router>
-          </ChatProvider>
-        </SessionProvider>
-      </AuthProvider>
-    </ErrorBoundary>
+                    error: {
+                      duration: 5000,
+                      iconTheme: {
+                        primary: '#EF4444',
+                        secondary: '#fff',
+                      },
+                    },
+                  }}
+                />
+              </Router>
+            </ChatProvider>
+          </SessionProvider>
+        </AuthProvider>
+      </ErrorBoundary>
+    </ThemeProvider>
   );
 }
 

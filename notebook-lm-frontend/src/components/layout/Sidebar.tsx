@@ -2,23 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useChat } from '../../contexts/ChatContext';
 import {
-  Home,
-  MessageSquare,
-  Clock,
-  Globe,
-  Youtube,
-  Settings,
-  Menu,
-  X,
-  ShieldCheck,
-  PlusCircle,
+  Home, MessageSquare, Clock, Globe, Youtube, Settings,
+  Menu, X, ShieldCheck, Plus, PanelLeftClose, Sparkles,
 } from 'lucide-react';
 
-interface NavItem {
-  icon: React.ElementType;
-  label: string;
-  path: string;
-}
+interface NavItem { icon: React.ElementType; label: string; path: string; }
 
 const navItems: NavItem[] = [
   { icon: Home, label: 'Home', path: '/app/home' },
@@ -30,136 +18,172 @@ const navItems: NavItem[] = [
   { icon: Settings, label: 'Settings', path: '/app/settings' },
 ];
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
   const location = useLocation();
   const { clearHistory } = useChat();
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // Close mobile menu on route change
+  useEffect(() => { setIsMobileOpen(false); }, [location.pathname]);
   useEffect(() => {
-    setIsMobileOpen(false);
-  }, [location.pathname]);
-
-  // Handle window resize
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        setIsMobileOpen(false);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const h = () => { if (window.innerWidth >= 1024) setIsMobileOpen(false); };
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
   }, []);
 
-  const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
-  };
-
-  const toggleMobile = () => {
-    setIsMobileOpen(!isMobileOpen);
-  };
+  // Touch gestures
+  useEffect(() => {
+    let sX = 0, sY = 0;
+    const ts = (e: TouchEvent) => { sX = e.touches[0].clientX; sY = e.touches[0].clientY; };
+    const te = (e: TouchEvent) => {
+      const eX = e.changedTouches[0].clientX;
+      const dX = eX - sX, aY = Math.abs(e.changedTouches[0].clientY - sY);
+      if (sX < 30 && dX > 60 && aY < 40 && isCollapsed) onToggleCollapse();
+      if (dX < -60 && aY < 40 && !isCollapsed && window.innerWidth < 1024) setIsMobileOpen(false);
+    };
+    window.addEventListener('touchstart', ts, { passive: true });
+    window.addEventListener('touchend', te, { passive: true });
+    return () => { window.removeEventListener('touchstart', ts); window.removeEventListener('touchend', te); };
+  }, [isCollapsed, onToggleCollapse]);
 
   return (
     <>
-      {/* Mobile menu button */}
+      {/* Persistent restore — liquid glass pulse */}
+      {isCollapsed && (
+        <button
+          onClick={onToggleCollapse}
+          className="sidebar-restore hidden lg:flex"
+          aria-label="Open navigation sidebar"
+          aria-expanded="false"
+          title="Open Sidebar (Ctrl+B)"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      )}
+
+      {/* Mobile toggle */}
       <button
-        onClick={toggleMobile}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-md border border-border"
+        onClick={() => setIsMobileOpen(!isMobileOpen)}
+        className="lg:hidden fixed z-50 liquid-glass rounded-glass transition-all duration-fast active:scale-[0.92] flex items-center justify-center"
+        style={{
+          top: '10px', left: '10px',
+          width: '44px', height: '44px',
+        }}
         aria-label="Toggle menu"
       >
-        {isMobileOpen ? (
-          <X className="w-6 h-6 text-text_primary" />
-        ) : (
-          <Menu className="w-6 h-6 text-text_primary" />
-        )}
+        {isMobileOpen ? <X className="w-5 h-5 text-text_secondary" /> : <Menu className="w-5 h-5 text-text_secondary" />}
       </button>
 
-      {/* Mobile overlay */}
+      {/* Mobile backdrop */}
       {isMobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={toggleMobile}
+          className="lg:hidden fixed inset-0 z-40 animate-fade-in"
+          style={{ background: 'rgba(0,0,0,0.15)', backdropFilter: 'blur(3px)' }}
+          onClick={() => setIsMobileOpen(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — liquid glass sheet */}
       <aside
         className={`
-          ${isCollapsed ? 'w-16' : 'w-sidebar'} 
-          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-          bg-white border-r border-border h-screen fixed left-0 top-0 overflow-y-auto z-40
-          transition-all duration-300 ease-in-out
+          ${isCollapsed ? 'w-0 lg:w-0 overflow-hidden' : 'w-sidebar'}
+          ${isMobileOpen ? 'translate-x-0 w-sidebar' : '-translate-x-full lg:translate-x-0'}
+          ${isCollapsed ? 'lg:-translate-x-full' : 'lg:translate-x-0'}
+          fixed left-0 top-0 h-screen z-40
+          flex flex-col
         `}
+        style={{
+          background: 'var(--glass-elevated)',
+          backdropFilter: `blur(var(--glass-blur-heavy))`,
+          WebkitBackdropFilter: `blur(var(--glass-blur-heavy))`,
+          borderRight: '1px solid var(--border-subtle)',
+          boxShadow: '8px 0 32px var(--glass-shadow)',
+          transition: 'transform 360ms cubic-bezier(0.22, 1, 0.36, 1), width 360ms cubic-bezier(0.22, 1, 0.36, 1)',
+        }}
+        aria-label="Navigation sidebar"
       >
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-2">
-              <Link
-                to="/app/home"
-                className={`block ${isCollapsed ? 'mx-auto' : ''}`}
+        {/* Logo */}
+        <div className="p-4 sm:p-5 z-content">
+          <div className="flex items-center justify-between mb-5">
+            <Link to="/app/home" className="flex items-center gap-2.5 group min-w-0">
+              <div
+                className="w-9 h-9 rounded-glass-sm flex items-center justify-center flex-shrink-0 transition-all duration-fast group-hover:scale-105"
+                style={{
+                  background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))',
+                  boxShadow: '0 4px 16px var(--hover-glow)',
+                }}
               >
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-xl">
-                    IA
-                  </div>
-                  {!isCollapsed && (
-                    <h2 className="text-2xl font-bold text-primary">
-                      Intellisense AI
-                    </h2>
-                  )}
-                </div>
-              </Link>
-              {!isCollapsed && (
-                <button
-                  onClick={clearHistory}
-                  className="p-2 ml-2 hover:bg-slate-100 rounded-full text-text_secondary transition-colors"
-                  title="New Chat"
-                >
-                  <PlusCircle className="w-5 h-5" />
-                </button>
-              )}
-            </div>
-            {!isCollapsed && (
-              <button
-                onClick={toggleCollapse}
-                className="hidden lg:block p-1 text-text_secondary hover:text-text_primary"
-                aria-label="Collapse sidebar"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+              <h2 className="text-lg font-bold text-text_primary whitespace-nowrap tracking-tight truncate">
+                IntelliSense AI
+              </h2>
+            </Link>
+            <button
+              onClick={onToggleCollapse}
+              className="hidden lg:flex items-center justify-center rounded-glass-sm transition-all duration-fast flex-shrink-0"
+              style={{
+                width: '36px', height: '36px',
+                background: 'transparent',
+                color: 'var(--text-muted)',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover-glow)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              aria-label="Collapse sidebar"
+              aria-expanded="true"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
           </div>
 
-          <nav className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path;
-
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`
-                    flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-200
-                    ${isCollapsed ? 'justify-center' : ''}
-                    ${isActive
-                      ? 'bg-blue-50 text-blue-600 font-medium'
-                      : 'text-text_secondary hover:bg-surface hover:text-text_primary'
-                    }
-                  `}
-                  aria-current={isActive ? 'page' : undefined}
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-                  {!isCollapsed && <span>{item.label}</span>}
-                </Link>
-              );
-            })}
-          </nav>
+          {/* New Chat — liquid gradient */}
+          <button
+            onClick={clearHistory}
+            className="w-full btn-primary-liquid flex items-center justify-center gap-2"
+            style={{ minHeight: '44px', marginBottom: '12px' }}
+            aria-label="New chat"
+          >
+            <Plus className="w-5 h-5 flex-shrink-0" />
+            <span className="z-content font-semibold">New Chat</span>
+          </button>
         </div>
+
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-1 z-content" role="navigation">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`nav-item relative group
+                  ${isActive ? 'text-primary font-medium' : 'text-text_secondary hover:text-text_primary'}`}
+                style={isActive ? {
+                  background: 'var(--hover-glow)',
+                  boxShadow: 'inset 0 0 0 1px rgba(122,140,255,0.12)',
+                } : undefined}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--hover-glow)'; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                {isActive && (
+                  <div
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full"
+                    style={{ background: 'linear-gradient(180deg, var(--accent-primary), var(--accent-secondary))' }}
+                  />
+                )}
+                <Icon className={`w-[18px] h-[18px] flex-shrink-0 transition-transform duration-fast ${!isActive ? 'group-hover:scale-110' : ''}`} />
+                <span className="text-sm truncate">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
       </aside>
     </>
   );
