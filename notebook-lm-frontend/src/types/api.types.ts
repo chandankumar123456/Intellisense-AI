@@ -3,6 +3,7 @@
 export interface User {
   user_id: string;
   username: string;
+  role?: string;
   exp?: number;
 }
 
@@ -21,6 +22,7 @@ export interface AuthResponse {
   user_id: string;
   username: string;
   token: string;
+  role: string;
 }
 
 export interface SessionResponse {

@@ -89,15 +89,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       dispatch({ type: 'LOGIN_START' });
       const response = await AuthService.login(credentials);
-      
+
       // Store token and user data
       Storage.setToken(response.token);
-      Storage.setUser({ user_id: response.user_id, username: response.username });
-      
+      Storage.setUser({ user_id: response.user_id, username: response.username, role: response.role });
+
       dispatch({
         type: 'LOGIN_SUCCESS',
         payload: {
-          user: { user_id: response.user_id, username: response.username },
+          user: { user_id: response.user_id, username: response.username, role: response.role },
           token: response.token,
         },
       });
@@ -111,15 +111,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       dispatch({ type: 'LOGIN_START' });
       const response = await AuthService.signup(credentials);
-      
+
       // Store token and user data
       Storage.setToken(response.token);
-      Storage.setUser({ user_id: response.user_id, username: response.username });
-      
+      Storage.setUser({ user_id: response.user_id, username: response.username, role: response.role });
+
       dispatch({
         type: 'LOGIN_SUCCESS',
         payload: {
-          user: { user_id: response.user_id, username: response.username },
+          user: { user_id: response.user_id, username: response.username, role: response.role },
           token: response.token,
         },
       });

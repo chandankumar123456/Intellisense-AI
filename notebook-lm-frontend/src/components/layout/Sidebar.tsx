@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useChat } from '../../contexts/ChatContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Home, MessageSquare, Clock, Globe, Youtube, Settings,
-  Menu, X, ShieldCheck, Plus, PanelLeftClose, Sparkles,
+  Menu, X, ShieldCheck, Plus, PanelLeftClose, Sparkles, Shield,
 } from 'lucide-react';
 
-interface NavItem { icon: React.ElementType; label: string; path: string; }
+interface NavItem { icon: React.ElementType; label: string; path: string; adminOnly?: boolean; }
 
 const navItems: NavItem[] = [
   { icon: Home, label: 'Home', path: '/app/home' },
@@ -15,6 +16,7 @@ const navItems: NavItem[] = [
   { icon: Globe, label: 'Web', path: '/app/web' },
   { icon: Youtube, label: 'YouTube', path: '/app/youtube' },
   { icon: ShieldCheck, label: 'Verification', path: '/app/verification' },
+  { icon: Shield, label: 'Admin', path: '/app/admin', adminOnly: true },
   { icon: Settings, label: 'Settings', path: '/app/settings' },
 ];
 
@@ -26,7 +28,13 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
   const location = useLocation();
   const { clearHistory } = useChat();
+  const { user } = useAuth();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // Filter out admin-only items for non-admin users
+  const visibleNavItems = navItems.filter(
+    (item) => !item.adminOnly || (user as any)?.role === 'admin'
+  );
 
   useEffect(() => { setIsMobileOpen(false); }, [location.pathname]);
   useEffect(() => {
@@ -155,7 +163,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-1 z-content" role="navigation">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
             return (
