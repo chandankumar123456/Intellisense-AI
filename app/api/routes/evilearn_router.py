@@ -44,6 +44,13 @@ class IngestRequest(BaseModel):
     subject: str = ""
     topic: str = ""
     subtopic: str = ""
+    academic_year: str = ""              # "1st" / "2nd" / "3rd" / "4th"
+    semester: str = ""                   # "1" / "2"
+    module: str = ""                     # "Unit 1", "Module 3", etc.
+    content_type: str = "notes"          # notes / ppt / textbook / reference / question_bank / other
+    difficulty_level: str = ""           # basic / exam_focused / advanced / conceptual
+    source_tag: str = ""                 # class_notes / standard_textbook / important / repeated_question
+    keywords: str = ""                   # comma-separated keywords
     syllabus_keywords: List[str] = []
     teacher_tagged_chunks: List[int] = []
 
@@ -126,12 +133,34 @@ async def ingest_file(
     topic: str = Form(default=""),
     subtopic: str = Form(default=""),
     syllabus_keywords: str = Form(default=""),
+    academic_year: str = Form(default=""),
+    semester: str = Form(default=""),
+    module: str = Form(default=""),
+    content_type: str = Form(default="notes"),
+    difficulty_level: str = Form(default=""),
+    source_tag: str = Form(default=""),
+    keywords: str = Form(default=""),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """
     Smart file ingestion with importance scoring.
     Only embeds high-importance chunks; creates metadata for all.
+    Requires: subject, semester, topic (mandatory academic scoping).
     """
+    # ── Mandatory academic metadata validation ──
+    missing = []
+    if not subject.strip():
+        missing.append("subject")
+    if not semester.strip():
+        missing.append("semester")
+    if not topic.strip():
+        missing.append("topic")
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Missing mandatory academic metadata: {', '.join(missing)}"
+        )
+
     doc_id = str(uuid.uuid4())
     text = ""
 
@@ -183,9 +212,16 @@ async def ingest_file(
                 source_type="pdf" if file.filename.lower().endswith(".pdf") else "note",
                 user_id=user_id,
                 syllabus_keywords=kw_list,
-                subject=subject,
-                topic=topic,
-                subtopic=subtopic,
+                subject=subject.strip(),
+                topic=topic.strip(),
+                subtopic=subtopic.strip(),
+                academic_year=academic_year.strip(),
+                semester=semester.strip(),
+                module=module.strip(),
+                content_type=content_type.strip(),
+                difficulty_level=difficulty_level.strip(),
+                source_tag=source_tag.strip(),
+                keywords=keywords.strip(),
             )
 
         background_tasks.add_task(_ingest_with_original)

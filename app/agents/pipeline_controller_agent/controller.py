@@ -46,6 +46,7 @@ from app.core.logging import log_info, log_error
 from app.rag.intent_classifier import classify_intent, IntentResult, QueryIntent
 from app.rag.query_rewriter import rewrite_query
 from app.rag.retrieval_validator import validate_retrieval
+from app.rag.subject_detector import detect_subject
 
 
 class PipelineControllerAgent:
@@ -202,7 +203,20 @@ class PipelineControllerAgent:
         }
 
         # ======================
-        # 2. RETRIEVAL (section-aware)
+        # 1.7 SUBJECT SCOPE DETECTION (rule-based, no LLM)
+        # ======================
+        subject_scope = detect_subject(query)
+        log_info(
+            f"Subject scope: subject='{subject_scope.subject}', "
+            f"confidence={subject_scope.confidence:.2f}, "
+            f"ambiguous={subject_scope.is_ambiguous}"
+        )
+        trace["subject_scope"] = subject_scope.model_dump()
+        if subject_scope.is_ambiguous:
+            warnings.append("ambiguous_subject_scope")
+
+        # ======================
+        # 2. RETRIEVAL (section-aware + subject-scoped)
         # ======================
         try:
             # 🔥 CRITICAL FIX: convert QueryUnderstanding RetrievalParams → RetrievalAgent RetrievalParams
@@ -223,7 +237,8 @@ class PipelineControllerAgent:
             self.retrieval_agent_output: RetrievalOutput = \
                 await self.retriever_orchestrator.run(
                     self.retrieval_agent_input,
-                    intent_result=intent_result  # Pass intent for section-aware retrieval
+                    intent_result=intent_result,  # Pass intent for section-aware retrieval
+                    subject_scope=subject_scope,  # Pass subject scope for filtering
                 )
 
         except Exception as e:

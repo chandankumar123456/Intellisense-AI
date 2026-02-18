@@ -47,7 +47,7 @@ const Button: React.FC<ButtonProps> = ({
         style={{
           minHeight: sz.minHeight,
           background: 'rgba(239, 68, 68, 0.08)',
-          borderColor: 'rgba(239, 68, 68, 0.15)',
+          borderColor: 'rgba(239, 68, 68, 0.2)',
           color: '#EF4444',
           boxShadow: '0 2px 8px rgba(239, 68, 68, 0.06)',
           ...style,
@@ -55,13 +55,17 @@ const Button: React.FC<ButtonProps> = ({
         disabled={disabled || isLoading}
         onMouseEnter={(e) => {
           if (!disabled) {
-            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.14)';
-            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)';
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 6px 20px rgba(239, 68, 68, 0.15)';
           }
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
-          e.currentTarget.style.transform = 'translateY(0)';
+          if (!disabled) {
+            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.06)';
+          }
         }}
         {...props}
       >

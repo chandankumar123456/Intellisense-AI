@@ -55,14 +55,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
             <h2 id="modal-title" className="text-base sm:text-lg font-semibold text-text_primary pr-4">{title}</h2>
             <button
               onClick={onClose}
-              className="flex items-center justify-center rounded-glass-sm transition-all duration-fast active:scale-[0.92] flex-shrink-0"
-              style={{
-                width: '36px', height: '36px',
-                background: 'transparent',
-                color: 'var(--text-muted)',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover-glow)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              className="flex items-center justify-center rounded-glass-sm transition-all duration-fast active:scale-[0.92] flex-shrink-0 w-9 h-9 text-text_muted hover:text-text_primary hover:bg-hover_glow"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />

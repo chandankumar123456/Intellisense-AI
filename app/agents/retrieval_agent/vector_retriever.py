@@ -1,5 +1,5 @@
 # app/agents/retrieval_agent/vector_retriever.py
-from typing import List
+from typing import List, Optional, Dict
 from .schema import Chunk
 from .utils import namespace
 import asyncio
@@ -9,9 +9,10 @@ class VectorRetriever:
     def __init__(self, vector_db_client):
         self.vector_db_client = vector_db_client
     
-    async def search(self, query: str, top_k: int) -> List[Chunk]:
+    async def search(self, query: str, top_k: int,
+                     subject_filter: Optional[str] = None) -> List[Chunk]:
         try:
-            log_info(f"Vector search: query='{query}', top_k={top_k}")
+            log_info(f"Vector search: query='{query}', top_k={top_k}, subject_filter='{subject_filter}'")
             
             # Embed query client-side
             from app.agents.retrieval_agent.utils import embed_text
@@ -22,18 +23,18 @@ class VectorRetriever:
                 log_error(f"Query embedding failed: {e}")
                 return []
 
-            # Use standard Pinecone query
+            # Build metadata filter for subject-scoped retrieval
+            meta_filter: Optional[Dict] = None
+            if subject_filter:
+                meta_filter = {"subject": subject_filter}
+
             # Use SAL query (which delegates to Pinecone or Chroma)
-            # SAL returns List[Dict] (matches list), whereas Pinecone returns Dict with 'matches' key.
-            # We need to adapt based on what we get, or just assume SAL returns matches.
-            # My SAL implementation of query() returns List[Dict] (matches).
-            
             results = await asyncio.to_thread(
                 self.vector_db_client.query,
                 namespace=namespace,
                 vector=query_vector,
                 top_k=top_k,
-                # include_metadata=True # Implied by SAL implementation usually, but keeps arg if compatible
+                filter=meta_filter,
             )
 
             chunk_list = []

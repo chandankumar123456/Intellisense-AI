@@ -109,9 +109,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
           background: 'var(--glass-elevated)',
           backdropFilter: `blur(var(--glass-blur-heavy))`,
           WebkitBackdropFilter: `blur(var(--glass-blur-heavy))`,
-          borderRight: '1px solid var(--border-subtle)',
-          boxShadow: '8px 0 32px var(--glass-shadow)',
-          transition: 'transform 360ms cubic-bezier(0.22, 1, 0.36, 1), width 360ms cubic-bezier(0.22, 1, 0.36, 1)',
+          borderRight: '1px solid var(--glass-edge)',
+          boxShadow: '10px 0 40px var(--glass-shadow-lg)',
+          transition: 'transform 400ms cubic-bezier(0.2, 0.8, 0.2, 1), width 400ms cubic-bezier(0.2, 0.8, 0.2, 1)',
         }}
         aria-label="Navigation sidebar"
       >
@@ -174,9 +174,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
                   ${isActive ? 'text-primary font-medium' : 'text-text_secondary hover:text-text_primary'}`}
                 style={isActive ? {
                   background: 'var(--hover-glow)',
-                  boxShadow: 'inset 0 0 0 1px rgba(122,140,255,0.12)',
+                  boxShadow: 'inset 0 0 0 1px rgba(122,140,255,0.15)',
                 } : undefined}
-                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--hover-glow)'; }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
                 onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 aria-current={isActive ? 'page' : undefined}
               >

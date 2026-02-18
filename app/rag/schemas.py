@@ -100,6 +100,13 @@ class ChunkCandidate(BaseModel):
     subject: str = ""
     topic: str = ""
     subtopic: str = ""
+    academic_year: str = ""          # "1st" / "2nd" / "3rd" / "4th"
+    semester: str = ""               # "1" / "2"
+    module: str = ""                 # "Unit 1", "Module 3", etc.
+    content_type: str = "notes"      # notes / ppt / textbook / reference / question_bank / other
+    difficulty_level: str = ""       # basic / exam_focused / advanced / conceptual
+    source_tag: str = ""             # class_notes / standard_textbook / important / repeated_question
+    keywords: str = ""               # comma-separated keywords
     user_id: str = ""
     should_embed: bool = False
     section_type: str = "body"

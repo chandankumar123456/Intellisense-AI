@@ -13,7 +13,7 @@ const HomePage: React.FC = () => {
   return (
     <div className="p-4 sm:p-6 lg:p-8 overflow-y-auto h-full" style={{ background: 'var(--bg-primary)' }}>
       <div className="max-w-4xl mx-auto">
-        <div className="mb-8 sm:mb-10">
+        <div className="mb-8 sm:mb-10 animate-fade-in-up">
           <h1 className="text-2xl sm:text-3xl font-semibold text-text_primary mb-2 tracking-tight">
             Welcome to IntelliSense AI
           </h1>
@@ -21,12 +21,15 @@ const HomePage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-8">
-          {quickActions.map(({ icon: Icon, title, desc, path, color }) => (
+          {quickActions.map(({ icon: Icon, title, desc, path, color }, index) => (
             <Link
               key={path}
               to={path}
-              className="group card transition-all duration-normal"
-              style={{ '--card-accent': color } as React.CSSProperties}
+              className="group card transition-all duration-normal animate-scale-in"
+              style={{
+                '--card-accent': color,
+                animationDelay: `${index * 100}ms`
+              } as React.CSSProperties}
             >
               <div className="flex items-start justify-between z-content relative">
                 <div className="flex-1 min-w-0">

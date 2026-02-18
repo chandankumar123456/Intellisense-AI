@@ -86,8 +86,8 @@ const Header: React.FC<HeaderProps> = ({ isCollapsed = false, onToggleSidebar })
             </div>
             <button
               onClick={handleLogout}
-              className="btn-liquid flex items-center gap-2"
-              style={{ minHeight: '36px', padding: '6px 14px', fontSize: '13px' }}
+              className="btn-liquid flex items-center gap-2 px-4 py-1.5 text-xs sm:text-sm"
+              style={{ minHeight: '36px' }}
               aria-label="Logout"
             >
               <LogOut className="w-4 h-4 flex-shrink-0" />

@@ -21,7 +21,7 @@ from app.core.logging import log_info, log_error, log_warning
 from app.rag.schemas import ChunkCandidate
 from app.rag.chunker import chunk_text_smart, deduplicate_chunks
 from app.rag.importance_scorer import compute_importance, should_embed
-from app.core.config import STORAGE_BACKEND, S3_BUCKET_NAME, S3_DOCUMENT_PREFIX, STORAGE_MODE
+from app.rag.keyword_extractor import extract_keywords
 # from app.infrastructure.metadata_store import upsert_metadata_batch # Removed
 # from app.infrastructure.document_store import store_document, store_original_file # Removed
 
@@ -38,6 +38,13 @@ async def ingest_document(
     topic: str = "",
     subtopic: str = "",
     document_title: str = "",
+    academic_year: str = "",
+    semester: str = "",
+    module: str = "",
+    content_type: str = "notes",
+    difficulty_level: str = "",
+    source_tag: str = "",
+    keywords: str = "",
 ) -> dict:
     """
     Full ingestion pipeline following EviLearn rules.
@@ -65,9 +72,45 @@ async def ingest_document(
                 "subject": subject,
                 "topic": topic,
                 "subtopic": subtopic,
+                "academic_year": academic_year,
+                "semester": semester,
+                "module": module,
+                "content_type": content_type,
+                "difficulty_level": difficulty_level,
+                "source_tag": source_tag,
+                "keywords": keywords,
             }).encode("utf-8"),
             "application/json"
         )
+
+        # 0.5 Dynamic Subject Learning
+        # Extract keywords and update the subject index if a subject is provided
+        if subject:
+            try:
+                # automated extraction
+                extracted_kws = extract_keywords(text)
+                
+                # merge with user provided keywords (syllabus_keywords + keywords param)
+                user_kws = []
+                if syllabus_keywords:
+                    user_kws.extend(syllabus_keywords)
+                if keywords:
+                    user_kws.extend([k.strip() for k in keywords.split(',') if k.strip()])
+                
+                # Update index for each unique keyword
+                all_kws = set(extracted_kws + user_kws)
+                for kw in all_kws:
+                    # Increment count for this subject
+                    # We access the impl directly if using one of the wrappers, strictly for this method
+                    # In a cleaner arch we'd expose this on the interface, but for now we cast
+                    if hasattr(storage_manager.metadata, 'impl'):
+                         storage_manager.metadata.impl.update_keyword_index(kw, subject)
+                    elif hasattr(storage_manager.metadata, 'update_keyword_index'):
+                         storage_manager.metadata.update_keyword_index(kw, subject)
+                         
+                log_info(f"Updated subject index for '{subject}' with {len(all_kws)} keywords")
+            except Exception as e:
+                log_warning(f"Failed to update subject index: {e}")
 
         # 1. Create candidate chunks
         candidates = chunk_text_smart(
@@ -104,6 +147,13 @@ async def ingest_document(
             chunk.subject = subject
             chunk.topic = topic
             chunk.subtopic = subtopic
+            chunk.academic_year = academic_year
+            chunk.semester = semester
+            chunk.module = module
+            chunk.content_type = content_type
+            chunk.difficulty_level = difficulty_level
+            chunk.source_tag = source_tag
+            chunk.keywords = keywords
 
         # 5. Embed and upsert only qualifying chunks
         # Rule: Embed if score >= THRESHOLD, OR if teacher tagged.
@@ -150,6 +200,13 @@ async def ingest_document(
                         "subtopic": chunk.subtopic or "",
                         "section_type": chunk.section_type,
                         "document_title": chunk.document_title,
+                        "academic_year": chunk.academic_year,
+                        "semester": chunk.semester,
+                        "module": chunk.module,
+                        "content_type": chunk.content_type,
+                        "difficulty_level": chunk.difficulty_level,
+                        "source_tag": chunk.source_tag,
+                        "keywords": chunk.keywords,
                     },
                 })
 
@@ -202,6 +259,13 @@ async def ingest_document(
                 "is_embedded": chunk.should_embed,
                 "section_type": chunk.section_type,
                 "document_title": chunk.document_title,
+                "academic_year": chunk.academic_year,
+                "semester": chunk.semester,
+                "module": chunk.module,
+                "content_type": chunk.content_type,
+                "difficulty_level": chunk.difficulty_level,
+                "source_tag": chunk.source_tag,
+                "keywords": chunk.keywords,
             })
 
         storage_manager.metadata.upsert_batch(metadata_entries)

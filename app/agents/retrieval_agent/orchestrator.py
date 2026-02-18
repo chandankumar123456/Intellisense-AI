@@ -7,6 +7,7 @@ from typing import List, Optional
 from uuid import uuid4
 from app.core.logging import log_info, log_warning
 from app.rag.intent_classifier import IntentResult, QueryIntent
+from app.rag.subject_detector import SubjectScope
 class RetrievalOrchestratorAgent:
     def __init__(self, vector_retriever: VectorRetriever, keyword_retriever: KeywordRetriever):
         self.vector_retriever = vector_retriever
@@ -18,7 +19,8 @@ class RetrievalOrchestratorAgent:
     def create_trace(self):
         return str(uuid4()) # it returns the trace_id for RetrievalOutput
         
-    async def run(self, input: RetrievalInput, intent_result: Optional[IntentResult] = None) -> RetrievalOutput:
+    async def run(self, input: RetrievalInput, intent_result: Optional[IntentResult] = None,
+                  subject_scope: Optional[SubjectScope] = None) -> RetrievalOutput:
         
         self.vector_chunks = []
         self.keyword_chunks = []
@@ -31,21 +33,32 @@ class RetrievalOrchestratorAgent:
             "retrievers_used": input.retrievers_to_use,
             "intent": intent_result.intent.value if intent_result else "unknown",
             "target_section": intent_result.target_section if intent_result else None,
+            "subject_scope": subject_scope.model_dump() if subject_scope else None,
             "results": {
                 "vector": None,
                 "keyword": None,
                 "section_metadata": None
             }
         }
+
+        # Determine subject filter from detected scope
+        subject_filter = None
+        if subject_scope and subject_scope.subject and not subject_scope.is_ambiguous:
+            subject_filter = subject_scope.subject
+            log_info(f"Subject-scoped retrieval: filtering by subject='{subject_filter}'")
+        elif subject_scope and subject_scope.is_ambiguous:
+            log_warning(f"Ambiguous subject scope: {subject_scope.matched_subjects}. Retrieving without filter.")
         
         if "vector" in input.retrievers_to_use:
             self.vector_chunks = await self.vector_retriever.search(
                 query = input.rewritten_query, 
-                top_k = input.retrieval_params.top_k_vector
+                top_k = input.retrieval_params.top_k_vector,
+                subject_filter = subject_filter,
             )
             self.retrieval_trace['results']['vector'] = {
                 "count": len(self.vector_chunks),
                 "top_k": input.retrieval_params.top_k_vector,
+                "subject_filter": subject_filter,
                 "status": "success" if self.vector_chunks else "no_results"
             }
             
@@ -74,6 +87,20 @@ class RetrievalOrchestratorAgent:
             }
             
         merged = self.merge_chunks([self.keyword_chunks, self.vector_chunks, section_chunks])
+
+        # Post-retrieval subject validation: filter out cross-subject chunks
+        if subject_filter and merged:
+            before_count = len(merged)
+            merged = [
+                c for c in merged
+                if c.metadata.get("subject", "") == subject_filter
+                or not c.metadata.get("subject")  # keep chunks with no subject tagged
+            ]
+            filtered_out = before_count - len(merged)
+            if filtered_out > 0:
+                log_warning(f"Subject validation: filtered out {filtered_out} cross-subject chunks")
+                self.retrieval_trace["subject_filtered_count"] = filtered_out
+
         final_chunks = self.normalize_scores(merged)
         
         final_chunks.sort(key=lambda c: c.normalized_score, reverse=True)

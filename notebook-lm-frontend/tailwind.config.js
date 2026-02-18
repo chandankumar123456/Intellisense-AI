@@ -54,73 +54,70 @@ module.exports = {
         'pill': '999px',
       },
       animation: {
-        /* Liquid physics */
-        'liquid-in': 'liquidIn 320ms cubic-bezier(0.22, 1, 0.36, 1)',
-        'liquid-out': 'liquidOut 240ms cubic-bezier(0.22, 1, 0.36, 1)',
-        'liquid-rise': 'liquidRise 240ms cubic-bezier(0.22, 1, 0.36, 1)',
-        'liquid-settle': 'liquidSettle 480ms cubic-bezier(0.22, 1, 0.36, 1)',
-        'liquid-morph': 'liquidMorph 420ms cubic-bezier(0.22, 1, 0.36, 1)',
+        /* Liquid physics - Smoother & Slower */
+        'liquid-in': 'liquidIn 600ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+        'liquid-out': 'liquidOut 400ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+        'liquid-rise': 'liquidRise 800ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+        'liquid-settle': 'liquidSettle 800ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+        'liquid-morph': 'liquidMorph 600ms cubic-bezier(0.2, 0.8, 0.2, 1)',
 
         /* Glass effects */
-        'light-sweep': 'lightSweep 1.8s ease-in-out',
-        'glass-pulse': 'glassPulse 3s ease-in-out infinite',
-        'specular-shift': 'specularShift 2.4s ease-in-out infinite',
-        'float': 'liquidFloat 5s cubic-bezier(0.22, 1, 0.36, 1) infinite',
+        'light-sweep': 'lightSweep 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
+        'glass-pulse': 'glassPulse 4s ease-in-out infinite',
+        'specular-shift': 'specularShift 5s ease-in-out infinite',
+        'float': 'liquidFloat 8s ease-in-out infinite',
 
-        /* Standard */
-        'fade-in': 'fadeIn 180ms ease-out',
-        'fade-in-up': 'fadeInUp 240ms cubic-bezier(0.22, 1, 0.36, 1)',
-        'scale-in': 'scaleIn 320ms cubic-bezier(0.22, 1, 0.36, 1)',
-        'slide-in-right': 'slideInRight 320ms cubic-bezier(0.22, 1, 0.36, 1)',
-        'pulse-soft': 'pulseSoft 600ms ease-in-out infinite',
-        'message-in': 'liquidRise 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+        /* Standard - More Premium Timing */
+        'fade-in': 'fadeIn 400ms ease-out forwards',
+        'fade-in-up': 'fadeInUp 600ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+        'scale-in': 'scaleIn 500ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+        'slide-in-right': 'slideInRight 500ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+        'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
+        'message-in': 'messageIn 500ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
 
         /* Liquid dots */
-        'liquid-dot-1': 'liquidDot 1.4s ease-in-out infinite',
-        'liquid-dot-2': 'liquidDot 1.4s ease-in-out 0.2s infinite',
-        'liquid-dot-3': 'liquidDot 1.4s ease-in-out 0.4s infinite',
+        'liquid-dot-1': 'liquidDot 1.6s ease-in-out infinite',
+        'liquid-dot-2': 'liquidDot 1.6s ease-in-out 0.2s infinite',
+        'liquid-dot-3': 'liquidDot 1.6s ease-in-out 0.4s infinite',
       },
       keyframes: {
         /* --- Liquid Physics --- */
         liquidIn: {
-          '0%': { opacity: '0', transform: 'translateX(-20px) scaleX(0.96)', filter: 'blur(4px)' },
-          '60%': { opacity: '1', transform: 'translateX(3px) scaleX(1.01)' },
+          '0%': { opacity: '0', transform: 'translateX(-15px) scaleX(0.98)', filter: 'blur(8px)' },
           '100%': { opacity: '1', transform: 'translateX(0) scaleX(1)', filter: 'blur(0)' },
         },
         liquidOut: {
-          '0%': { opacity: '1', transform: 'translateX(0) scaleX(1)' },
-          '100%': { opacity: '0', transform: 'translateX(-16px) scaleX(0.97)', filter: 'blur(3px)' },
+          '0%': { opacity: '1', transform: 'translateX(0) scaleX(1)', filter: 'blur(0)' },
+          '100%': { opacity: '0', transform: 'translateX(-10px) scaleX(0.98)', filter: 'blur(5px)' },
         },
         liquidRise: {
-          '0%': { opacity: '0', transform: 'translateY(8px) scaleY(0.97) scaleX(0.99)' },
-          '60%': { opacity: '1', transform: 'translateY(-1px) scaleY(1.005)' },
-          '100%': { opacity: '1', transform: 'translateY(0) scaleY(1) scaleX(1)' },
+          '0%': { opacity: '0', transform: 'translateY(15px) scale(0.98)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
         },
         liquidSettle: {
-          '0%': { transform: 'scale(1.01) translateY(-2px)' },
-          '40%': { transform: 'scale(0.998) translateY(1px)' },
-          '70%': { transform: 'scale(1.002) translateY(-0.5px)' },
+          '0%': { transform: 'scale(1.02) translateY(-1px)' },
+          '50%': { transform: 'scale(0.99) translateY(0.5px)' },
           '100%': { transform: 'scale(1) translateY(0)' },
         },
         liquidMorph: {
-          '0%': { borderRadius: '14px', transform: 'scale(1)' },
-          '30%': { borderRadius: '16px 12px', transform: 'scale(0.998, 1.003)' },
-          '100%': { borderRadius: '14px', transform: 'scale(1)' },
+          '0%': { borderRadius: '14px' },
+          '50%': { borderRadius: '20px 10px' },
+          '100%': { borderRadius: '14px' },
         },
         liquidFloat: {
-          '0%, 100%': { transform: 'translateY(0) rotate(0deg)' },
-          '25%': { transform: 'translateY(-4px) rotate(0.5deg)' },
-          '75%': { transform: 'translateY(2px) rotate(-0.3deg)' },
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-6px)' },
         },
 
         /* --- Glass Effects --- */
         lightSweep: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
+          '0%': { backgroundPosition: '-150% 0', opacity: '0' },
+          '20%': { opacity: '1' },
+          '100%': { backgroundPosition: '150% 0', opacity: '0' },
         },
         glassPulse: {
-          '0%, 100%': { boxShadow: '0 0 20px var(--hover-glow)', opacity: '0.8' },
-          '50%': { boxShadow: '0 0 30px var(--hover-glow)', opacity: '1' },
+          '0%, 100%': { boxShadow: '0 0 15px var(--hover-glow)', opacity: '0.9' },
+          '50%': { boxShadow: '0 0 25px var(--active-glow)', opacity: '1' },
         },
         specularShift: {
           '0%, 100%': { backgroundPosition: '0% 50%' },
@@ -133,22 +130,24 @@ module.exports = {
           '100%': { opacity: '1' },
         },
         fadeInUp: {
-          '0%': { opacity: '0', transform: 'translateY(8px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
+          '0%': { opacity: '0', transform: 'translateY(15px)', filter: 'blur(3px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)', filter: 'blur(0)' },
         },
         scaleIn: {
-          '0%': { opacity: '0', transform: 'scale(0.96)' },
-          '60%': { opacity: '1', transform: 'scale(1.005)' },
-          '100%': { opacity: '1', transform: 'scale(1)' },
+          '0%': { opacity: '0', transform: 'scale(0.94)', filter: 'blur(2px)' },
+          '100%': { opacity: '1', transform: 'scale(1)', filter: 'blur(0)' },
         },
         slideInRight: {
-          '0%': { opacity: '0', transform: 'translateX(100%) scaleX(0.97)' },
-          '60%': { transform: 'translateX(-1%) scaleX(1.003)' },
-          '100%': { opacity: '1', transform: 'translateX(0) scaleX(1)' },
+          '0%': { opacity: '0', transform: 'translateX(20px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        messageIn: {
+          '0%': { opacity: '0', transform: 'translateY(10px) scale(0.98)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
         },
         pulseSoft: {
-          '0%, 100%': { opacity: '0.3', transform: 'scale(0.85)' },
-          '50%': { opacity: '1', transform: 'scale(1.1)' },
+          '0%, 100%': { opacity: '0.6', transform: 'scale(0.98)' },
+          '50%': { opacity: '1', transform: 'scale(1.02)' },
         },
         liquidDot: {
           '0%, 100%': { transform: 'translateY(0) scale(1)', opacity: '0.4' },

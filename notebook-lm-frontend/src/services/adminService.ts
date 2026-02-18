@@ -84,6 +84,13 @@ const adminService = {
             topic?: string;
             subtopic?: string;
             syllabus_keywords?: string;
+            academic_year?: string;
+            semester?: string;
+            module?: string;
+            content_type?: string;
+            difficulty_level?: string;
+            source_tag?: string;
+            keywords?: string;
         }
     ): Promise<any> => {
         const formData = new FormData();
@@ -93,6 +100,13 @@ const adminService = {
         if (metadata.topic) formData.append('topic', metadata.topic);
         if (metadata.subtopic) formData.append('subtopic', metadata.subtopic);
         if (metadata.syllabus_keywords) formData.append('syllabus_keywords', metadata.syllabus_keywords);
+        if (metadata.academic_year) formData.append('academic_year', metadata.academic_year);
+        if (metadata.semester) formData.append('semester', metadata.semester);
+        if (metadata.module) formData.append('module', metadata.module);
+        if (metadata.content_type) formData.append('content_type', metadata.content_type);
+        if (metadata.difficulty_level) formData.append('difficulty_level', metadata.difficulty_level);
+        if (metadata.source_tag) formData.append('source_tag', metadata.source_tag);
+        if (metadata.keywords) formData.append('keywords', metadata.keywords);
 
         return apiClient.post('/api/evilearn/ingest/file', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },

@@ -119,10 +119,19 @@ const UploadTab: React.FC = () => {
     const [topic, setTopic] = useState('');
     const [subtopic, setSubtopic] = useState('');
     const [syllabusKeywords, setSyllabusKeywords] = useState('');
+    const [academicYear, setAcademicYear] = useState('');
+    const [semester, setSemester] = useState('');
+    const [module, setModule] = useState('');
+    const [contentType, setContentType] = useState('notes');
+    const [difficultyLevel, setDifficultyLevel] = useState('');
+    const [sourceTag, setSourceTag] = useState('');
+    const [keywords, setKeywords] = useState('');
     const [uploading, setUploading] = useState(false);
     const [recentUploads, setRecentUploads] = useState<{ name: string; docId: string; status: string }[]>([]);
     const [dragOver, setDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const isFormValid = file && subject.trim() && semester.trim() && topic.trim();
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -140,6 +149,13 @@ const UploadTab: React.FC = () => {
                 topic,
                 subtopic,
                 syllabus_keywords: syllabusKeywords,
+                academic_year: academicYear,
+                semester,
+                module,
+                content_type: contentType,
+                difficulty_level: difficultyLevel,
+                source_tag: sourceTag,
+                keywords,
             });
             toast.success(`${file.name} queued for smart ingestion!`);
             setRecentUploads((prev) => [
@@ -151,6 +167,13 @@ const UploadTab: React.FC = () => {
             setTopic('');
             setSubtopic('');
             setSyllabusKeywords('');
+            setAcademicYear('');
+            setSemester('');
+            setModule('');
+            setContentType('notes');
+            setDifficultyLevel('');
+            setSourceTag('');
+            setKeywords('');
             if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (err) {
             toast.error('Upload failed. Please try again.');
@@ -216,22 +239,100 @@ const UploadTab: React.FC = () => {
             {/* Metadata form */}
             <div className="liquid-glass rounded-glass" style={{ padding: '20px' }}>
                 <div className="z-content relative">
-                    <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
+                    <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
                         Document Metadata
                     </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                        Fields marked with <span style={{ color: '#EF4444' }}>*</span> are required for academic scoping.
+                    </p>
+
+                    {/* Required fields */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                         <div>
-                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Subject</label>
-                            <input className="input-field" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g., Computer Science" />
+                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                Subject <span style={{ color: '#EF4444' }}>*</span>
+                            </label>
+                            <input className="input-field" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g., DBMS" />
                         </div>
                         <div>
-                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Topic</label>
-                            <input className="input-field" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g., Machine Learning" />
+                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                Semester <span style={{ color: '#EF4444' }}>*</span>
+                            </label>
+                            <select className="input-field" value={semester} onChange={(e) => setSemester(e.target.value)}>
+                                <option value="">Select Semester</option>
+                                <option value="1">Semester 1</option>
+                                <option value="2">Semester 2</option>
+                                <option value="3">Semester 3</option>
+                                <option value="4">Semester 4</option>
+                                <option value="5">Semester 5</option>
+                                <option value="6">Semester 6</option>
+                                <option value="7">Semester 7</option>
+                                <option value="8">Semester 8</option>
+                            </select>
                         </div>
+                        <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                Topic <span style={{ color: '#EF4444' }}>*</span>
+                            </label>
+                            <input className="input-field" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g., Normalization" />
+                        </div>
+                    </div>
+
+                    {/* Optional fields */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                        <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Academic Year</label>
+                            <select className="input-field" value={academicYear} onChange={(e) => setAcademicYear(e.target.value)}>
+                                <option value="">Select Year</option>
+                                <option value="1st">1st Year</option>
+                                <option value="2nd">2nd Year</option>
+                                <option value="3rd">3rd Year</option>
+                                <option value="4th">4th Year</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Module / Unit</label>
+                            <input className="input-field" value={module} onChange={(e) => setModule(e.target.value)} placeholder="e.g., Unit 3" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Content Type</label>
+                            <select className="input-field" value={contentType} onChange={(e) => setContentType(e.target.value)}>
+                                <option value="notes">Notes</option>
+                                <option value="ppt">PPT / Slides</option>
+                                <option value="textbook">Textbook</option>
+                                <option value="reference">Reference Material</option>
+                                <option value="question_bank">Question Bank</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                         <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Subtopic</label>
-                            <input className="input-field" value={subtopic} onChange={(e) => setSubtopic(e.target.value)} placeholder="e.g., Neural Networks" />
+                            <input className="input-field" value={subtopic} onChange={(e) => setSubtopic(e.target.value)} placeholder="e.g., BCNF" />
                         </div>
+                        <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Difficulty Level</label>
+                            <select className="input-field" value={difficultyLevel} onChange={(e) => setDifficultyLevel(e.target.value)}>
+                                <option value="">Select Level</option>
+                                <option value="basic">Basic</option>
+                                <option value="exam_focused">Exam Focused</option>
+                                <option value="advanced">Advanced</option>
+                                <option value="conceptual">Conceptual</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Source Tag</label>
+                            <select className="input-field" value={sourceTag} onChange={(e) => setSourceTag(e.target.value)}>
+                                <option value="">Select Tag</option>
+                                <option value="class_notes">Class Notes</option>
+                                <option value="standard_textbook">Standard Textbook</option>
+                                <option value="important">Important</option>
+                                <option value="repeated_question">Repeated Question</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
                                 Syllabus Keywords <span style={{ color: 'var(--text-muted)' }}>(comma-separated)</span>
@@ -240,29 +341,47 @@ const UploadTab: React.FC = () => {
                                 className="input-field"
                                 value={syllabusKeywords}
                                 onChange={(e) => setSyllabusKeywords(e.target.value)}
-                                placeholder="e.g., CNN, gradient descent, backpropagation"
+                                placeholder="e.g., CNN, gradient descent"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                Keywords <span style={{ color: 'var(--text-muted)' }}>(comma-separated)</span>
+                            </label>
+                            <input
+                                className="input-field"
+                                value={keywords}
+                                onChange={(e) => setKeywords(e.target.value)}
+                                placeholder="e.g., normalization, 3NF, BCNF"
                             />
                         </div>
                     </div>
-                    <div className="mt-4 flex justify-end">
-                        <button
-                            onClick={handleUpload}
-                            disabled={!file || uploading}
-                            className="btn-primary-liquid"
-                            style={{ minHeight: '42px', padding: '0 28px', fontSize: '14px' }}
-                        >
-                            {uploading ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin z-content relative" />
-                                    <span className="z-content relative">Uploading...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Upload className="w-4 h-4 z-content relative" />
-                                    <span className="z-content relative">Upload & Index</span>
-                                </>
-                            )}
-                        </button>
+                    <div className="mt-4 flex items-center justify-between">
+                        {!isFormValid && (
+                            <p className="text-xs" style={{ color: '#EF4444' }}>
+                                Fill in Subject, Semester, and Topic to enable upload.
+                            </p>
+                        )}
+                        <div className="ml-auto">
+                            <button
+                                onClick={handleUpload}
+                                disabled={!isFormValid || uploading}
+                                className="btn-primary-liquid"
+                                style={{ minHeight: '42px', padding: '0 28px', fontSize: '14px' }}
+                            >
+                                {uploading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin z-content relative" />
+                                        <span className="z-content relative">Uploading...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload className="w-4 h-4 z-content relative" />
+                                        <span className="z-content relative">Upload & Index</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
