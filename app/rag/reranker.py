@@ -36,6 +36,39 @@ def _cosine_similarity(a: List[float], b: List[float]) -> float:
     return dot / (na * nb)
 
 
+def _compute_definition_score(text: str) -> float:
+    """Detect definitional patterns in text."""
+    text_lower = text.lower()
+    
+    # Strong definition indicators
+    # "is a", "refers to", "defined as", "consists of"
+    patterns = [
+        r"\bis\s+a\b", r"\bare\s+a\b", 
+        r"\brefers\s+to\b", 
+        r"\bdefined\s+as\b", 
+        r"\bconsists\s+of\b", 
+        r"\bcomposed\s+of\b",
+        r"\bwe\s+propose\b", 
+        r"\bour\s+approach\b",
+        r"\barchitecture\b", 
+        r"\bpipeline\b", 
+        r"\breasoning\s+loop\b", 
+        r"\balgorithm\b"
+    ]
+    
+    score = 0.0
+    for pat in patterns:
+        if re.search(pat, text_lower):
+            score += 0.3
+    
+    # Boost for structural words if length is sufficient
+    if len(text.split()) > 30:
+        if "therefore" in text_lower or "hence" in text_lower or "specifically" in text_lower:
+            score += 0.1
+            
+    return min(score, 1.0)
+
+
 def rerank_passages(
     passages: List[Dict[str, Any]],
     query: str,
@@ -48,26 +81,25 @@ def rerank_passages(
     document_boost_weight: float = 0.10,
     target_section: Optional[str] = None,
     prefer_user_documents: bool = False,
+    is_conceptual: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Re-rank passages combining semantic score, keyword overlap,
     section match bonus, and document-specificity bonus.
-
-    Each passage dict should have at least:
-      - "text": str
-      - "score": float (original retrieval score)
-      - ...other metadata preserved
-
-    Ranking priority (via weighted scoring):
-      1. Exact section match from uploaded document (highest)
-      2. Same-document semantic relevance
-      3. Cross-document semantic relevance
-      4. Generic conceptual chunks (lowest)
-
-    Returns: List of top_k passages with added "rerank_score" field.
+    
+    For conceptual queries: adjusts weights to favor definitions and explanations.
     """
     if not passages:
         return []
+        
+    # Adjust weights for conceptual queries
+    definition_weight = 0.0
+    if is_conceptual:
+        semantic_weight = 0.55
+        definition_weight = 0.20
+        keyword_weight = 0.15
+        section_boost_weight = 0.08
+        document_boost_weight = 0.02
 
     query_tokens = _tokenize(query)
 
@@ -88,12 +120,20 @@ def rerank_passages(
 
         # Section match bonus
         section_match = 0.0
+        passage_section = passage.get("section_type", "")
+        if not passage_section and isinstance(passage.get("metadata"), dict):
+            passage_section = passage.get("metadata", {}).get("section_type", "")
+            
         if target_section:
-            passage_section = passage.get("section_type", "")
-            if not passage_section and isinstance(passage.get("metadata"), dict):
-                passage_section = passage.get("metadata", {}).get("section_type", "")
             if passage_section == target_section:
                 section_match = 1.0
+                
+        # Conceptual Boost
+        # If query is conceptual, prioritize Definition/Introduction/Overview sections
+        if is_conceptual:
+            if passage_section and any(x in passage_section for x in ["definition", "introduction", "overview"]):
+                # Boost significantly (similar to target_section) to bubble up definitions
+                section_match = max(section_match, 0.8)
 
         # Document-specificity bonus — prefer user-uploaded content
         doc_match = 0.0
@@ -103,6 +143,17 @@ def rerank_passages(
                 source_type = passage.get("metadata", {}).get("source_type", "")
             if source_type in ("pdf", "file", "note"):
                 doc_match = 1.0
+        
+        # Definition Presence Score
+        def_score = 0.0
+        if is_conceptual:
+            def_score = _compute_definition_score(text)
+            
+        # Mention-only penalty
+        # If passage is short (< 20 words) and has no definition signal -> penalize
+        penalty = 0.0
+        if len(text.split()) < 20 and def_score < 0.1:
+            penalty = -0.2
 
         # Combined score
         combined = (
@@ -110,6 +161,8 @@ def rerank_passages(
             + (keyword_weight * kw_score)
             + (section_boost_weight * section_match)
             + (document_boost_weight * doc_match)
+            + (definition_weight * def_score)
+            + penalty
         )
 
         scored.append({
@@ -117,6 +170,7 @@ def rerank_passages(
             "rerank_score": round(combined, 6),
             "semantic_score": round(sem_score, 6),
             "keyword_score": round(kw_score, 6),
+            "definition_presence_score": round(def_score, 6),
             "section_match": section_match > 0,
             "document_match": doc_match > 0,
         })
@@ -126,8 +180,8 @@ def rerank_passages(
 
     result = scored[:top_k]
     log_info(
-        f"Re-ranked {len(passages)} passages → top {len(result)}"
-        f" (section_boost={'on' if target_section else 'off'}"
+        f"Re-ranked {len(passages)} passages -> top {len(result)}"
+        f" (conceptual={is_conceptual}, section_boost={'on' if target_section else 'off'}"
         f", doc_boost={'on' if prefer_user_documents else 'off'})"
     )
 

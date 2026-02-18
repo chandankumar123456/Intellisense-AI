@@ -37,7 +37,7 @@ def configure_logger() -> logging.Logger:
     console_handler.addFilter(TraceIdFilter())
     logger.addHandler(console_handler)
 
-    file_handler = logging.FileHandler(LOG_FILE_PATH)
+    file_handler = logging.FileHandler(LOG_FILE_PATH, encoding='utf-8')
     file_handler.setFormatter(formatter)
     file_handler.addFilter(TraceIdFilter())
     logger.addHandler(file_handler)
@@ -50,14 +50,34 @@ logger = configure_logger()
 
 def log_info(message: str, trace_id: Optional[str] = None):
     """Log info message with optional trace ID."""
-    logger.info(message, extra={"trace_id": trace_id or "none"})
-
+    try:
+        logger.info(message, extra={"trace_id": trace_id or "none"})
+    except Exception:
+        # Fallback for encoding errors or other log failures
+        try:
+            safe_msg = message.encode("ascii", "replace").decode("ascii")
+            logger.info(safe_msg, extra={"trace_id": trace_id or "none"})
+        except:
+            pass 
 
 def log_error(message: str, trace_id: Optional[str] = None):
     """Log error message with optional trace ID."""
-    logger.error(message, extra={"trace_id": trace_id or "none"})
-
+    try:
+        logger.error(message, extra={"trace_id": trace_id or "none"})
+    except Exception:
+        try:
+            safe_msg = message.encode("ascii", "replace").decode("ascii")
+            logger.error(safe_msg, extra={"trace_id": trace_id or "none"})
+        except:
+            pass
 
 def log_warning(message: str, trace_id: Optional[str] = None):
     """Log warning message with optional trace ID."""
-    logger.warning(message, extra={"trace_id": trace_id or "none"})
+    try:
+        logger.warning(message, extra={"trace_id": trace_id or "none"})
+    except Exception:
+        try:
+            safe_msg = message.encode("ascii", "replace").decode("ascii")
+            logger.warning(safe_msg, extra={"trace_id": trace_id or "none"})
+        except:
+            pass

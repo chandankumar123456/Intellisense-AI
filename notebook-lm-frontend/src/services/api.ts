@@ -12,7 +12,7 @@ class ApiClient {
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 30000, // 30 seconds
+      timeout: 60000, // 60 seconds
       headers: {
         'Content-Type': 'application/json',
       },
@@ -138,7 +138,7 @@ class ApiClient {
       await this.client.get('/auth/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       // Token is still valid, no refresh needed
       return true;
     } catch (error) {
@@ -154,7 +154,7 @@ class ApiClient {
     useCache: boolean = false
   ): Promise<T> {
     const cacheKey = apiCache.generateKey(url, config?.params);
-    
+
     // Check cache first
     if (useCache) {
       const cached = apiCache.get<T>(cacheKey);
@@ -164,23 +164,23 @@ class ApiClient {
     }
 
     const response = await this.client.get(url, config);
-    
+
     // Cache the response
     if (useCache) {
       apiCache.set(cacheKey, response.data);
     }
-    
+
     return response.data;
   }
 
   public async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.client.post(url, data, config);
-    
+
     // Invalidate related cache entries on POST
     if (url.includes('/chat/query')) {
       apiCache.delete(apiCache.generateKey(url));
     }
-    
+
     return response.data;
   }
 

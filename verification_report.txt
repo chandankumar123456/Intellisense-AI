@@ -1,0 +1,157 @@
+2026-02-18 20:45:57.139116: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING:tensorflow:From C:\AnacondaFilesDontDelete\Lib\site-packages\tf_keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2026-02-18 20:46:14,673 | INFO | trace_id=none | Initializing StorageManager in aws mode
+2026-02-18 20:46:16,368 | INFO | trace_id=none | Storage adapters initialized successfully
+2026-02-18 20:46:16,395 | INFO | trace_id=none | Initializing SubjectDetector: Computing centroids...
+2026-02-18 20:46:24,112 | INFO | trace_id=none | SubjectDetector initialized with 61 centroids.
+2026-02-18 20:46:24,145 | INFO | trace_id=none | Subject-scoped retrieval: filtering by subject='Fundamentals of Artificial Intelligence'
+2026-02-18 20:46:24,146 | INFO | trace_id=none | Vector search: query='What is Agentic RAG? Explain its core architecture and reasoning loop in detail.', top_k=5, subject_filter='Fundamentals of Artificial Intelligence'
+2026-02-18 20:46:25,898 | WARNING | trace_id=none | Vector search returned no results for query: 'What is Agentic RAG? Explain its core architecture and reasoning loop in detail.'
+2026-02-18 20:46:25,899 | INFO | trace_id=none | Retrieval validation failed for conceptual query. Attempting secondary retry.
+2026-02-18 20:46:25,900 | INFO | trace_id=none | Section metadata fetch: 0 chunks for section='definition'
+2026-02-18 20:46:25,900 | INFO | trace_id=none | Secondary retry found no definition chunks.
+2026-02-18 20:46:25,900 | INFO | trace_id=none | Retrieval complete: 0 vector + 0 keyword + 0 section + 0 context = 0 total reranked
+2026-02-18 20:46:25,900 | WARNING | trace_id=none | No chunks retrieved for query: 'What is Agentic RAG? Explain its core architecture and reasoning loop in detail.'
+2026-02-18 20:46:25,926 | INFO | trace_id=none | Subject-scoped retrieval: filtering by subject='Fundamentals of Artificial Intelligence'
+2026-02-18 20:46:25,926 | INFO | trace_id=none | Vector search: query='How does the retrievalûvalidationûretry reasoning loop work in Agentic RAG?', top_k=5, subject_filter='Fundamentals of Artificial Intelligence'
+2026-02-18 20:46:26,295 | WARNING | trace_id=none | Vector search returned no results for query: 'How does the retrievalûvalidationûretry reasoning loop work in Agentic RAG?'
+2026-02-18 20:46:26,296 | INFO | trace_id=none | Retrieval validation failed for conceptual query. Attempting secondary retry.
+2026-02-18 20:46:26,297 | INFO | trace_id=none | Section metadata fetch: 0 chunks for section='definition'
+2026-02-18 20:46:26,297 | INFO | trace_id=none | Secondary retry found no definition chunks.
+2026-02-18 20:46:26,297 | INFO | trace_id=none | Retrieval complete: 0 vector + 0 keyword + 0 section + 0 context = 0 total reranked
+2026-02-18 20:46:26,297 | WARNING | trace_id=none | No chunks retrieved for query: 'How does the retrievalûvalidationûretry reasoning loop work in Agentic RAG?'
+2026-02-18 20:46:26,322 | WARNING | trace_id=none | Ambiguous subject scope: ['Fundamentals of Artificial Intelligence', 'Fundamentals of Software Engineering']. Retrieving without filter.
+2026-02-18 20:46:26,322 | INFO | trace_id=none | Vector search: query='What are the main components of an Agentic RAG system and how do they interact?', top_k=5, subject_filter='None'
+2026-02-18 20:46:26,743 | WARNING | trace_id=none | Invalid source_type 'test' for chunk test_verification_doc_0. Defaulting to 'note'.
+2026-02-18 20:46:26,743 | INFO | trace_id=none | Vector search returned 1 chunks
+2026-02-18 20:46:26,743 | INFO | trace_id=none | Context expansion skipped: missing page/offset for chunk test_verification_doc_0
+Traceback (most recent call last):
+  File "E:\Projects\IntelliSense AI\verify_system_stability.py", line 144, in verify_system
+    output, latency_ms = await measure_latency(retriever_orchestrator.run(
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Projects\IntelliSense AI\verify_system_stability.py", line 40, in measure_latency
+    result = await coroutine
+             ^^^^^^^^^^^^^^^
+  File "E:\Projects\IntelliSense AI\app\agents\retrieval_agent\orchestrator.py", line 126, in run
+    final_chunks = self.rerank_chunks(
+                   ^^^^^^^^^^^^^^^^^^^
+  File "E:\Projects\IntelliSense AI\app\agents\retrieval_agent\orchestrator.py", line 395, in rerank_chunks
+    p = c.model_dump()
+        ^^^^^^^^^^^^
+AttributeError: 'Chunk' object has no attribute 'model_dump'
+2026-02-18 20:46:26,778 | WARNING | trace_id=none | Ambiguous subject scope: ['Fundamentals of Artificial Intelligence', 'Negotiation Skills']. Retrieving without filter.
+2026-02-18 20:46:26,778 | INFO | trace_id=none | Vector search: query='How is Agentic RAG different from traditional RAG?', top_k=5, subject_filter='None'
+2026-02-18 20:46:27,146 | WARNING | trace_id=none | Invalid source_type 'test' for chunk test_verification_doc_0. Defaulting to 'note'.
+2026-02-18 20:46:27,146 | INFO | trace_id=none | Vector search returned 1 chunks
+2026-02-18 20:46:27,146 | INFO | trace_id=none | Context expansion skipped: missing page/offset for chunk test_verification_doc_0
+Traceback (most recent call last):
+  File "E:\Projects\IntelliSense AI\verify_system_stability.py", line 144, in verify_system
+    output, latency_ms = await measure_latency(retriever_orchestrator.run(
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Projects\IntelliSense AI\verify_system_stability.py", line 40, in measure_latency
+    result = await coroutine
+             ^^^^^^^^^^^^^^^
+  File "E:\Projects\IntelliSense AI\app\agents\retrieval_agent\orchestrator.py", line 126, in run
+    final_chunks = self.rerank_chunks(
+                   ^^^^^^^^^^^^^^^^^^^
+  File "E:\Projects\IntelliSense AI\app\agents\retrieval_agent\orchestrator.py", line 395, in rerank_chunks
+    p = c.model_dump()
+        ^^^^^^^^^^^^
+AttributeError: 'Chunk' object has no attribute 'model_dump'
+Migrating column: secondary_subject...
+Column secondary_subject likely exists or error: duplicate column name: secondary_subject
+Migrating column: confidence...
+Column confidence likely exists or error: duplicate column name: confidence
+Migrating column: section_type...
+Column section_type likely exists or error: duplicate column name: section_type
+Migrating column: document_title...
+Column document_title likely exists or error: duplicate column name: document_title
+Migrating column: academic_year...
+Column academic_year likely exists or error: duplicate column name: academic_year
+Migrating column: semester...
+Column semester likely exists or error: duplicate column name: semester
+Migrating column: module...
+Column module likely exists or error: duplicate column name: module
+Migrating column: content_type...
+Column content_type likely exists or error: duplicate column name: content_type
+Migrating column: difficulty_level...
+Column difficulty_level likely exists or error: duplicate column name: difficulty_level
+Migrating column: source_tag...
+Column source_tag likely exists or error: duplicate column name: source_tag
+Migrating column: keywords...
+Column keywords likely exists or error: duplicate column name: keywords
+INITIALIZING SYSTEM (Retrieval Only)...
+Vector retriever: <app.agents.retrieval_agent.vector_retriever.VectorRetriever object at 0x0000023153C42900>
+Keyword retriever: <__main__.MockKeywordRetriever object at 0x0000023153B45E80>
+PASS: RetrievalStack Initialized.
+CHECKING SUBJECT DETECTOR SINGLETON...
+PASS: SubjectDetector is Singleton.
+
+RUNNING TEST QUERIES (Retrieval Only)...
+
+--- Query 1: What is Agentic RAG? Explain its core architecture and reasoning loop in detail. ---
+  Latency: 1754.83ms
+  Top Score: 0.0
+  Def Score (Top): 0.0
+  Context Expansion: 0
+  Retry Triggered: False
+
+--- Query 2: How does the retrievalûvalidationûretry reasoning loop work in Agentic RAG? ---
+  Latency: 371.34ms
+  Top Score: 0.0
+  Def Score (Top): 0.0
+  Context Expansion: 0
+  Retry Triggered: False
+
+--- Query 3: What are the main components of an Agentic RAG system and how do they interact? ---
+ERROR running query 3: 'Chunk' object has no attribute 'model_dump'
+
+--- Query 4: How is Agentic RAG different from traditional RAG? ---
+ERROR running query 4: 'Chunk' object has no attribute 'model_dump'
+
+
+==============================
+SYSTEM_VERIFICATION_REPORT
+==============================
+{
+  "Retrieval Quality": {
+    "Query 1": {
+      "top_score": 0.0,
+      "definition_score_top": 0.0,
+      "context_expansion": 0,
+      "retry_triggered": false,
+      "answer_confidence": "N/A (LLM Skipped)",
+      "issue_detected": "No chunks retrieved"
+    },
+    "Query 2": {
+      "top_score": 0.0,
+      "definition_score_top": 0.0,
+      "context_expansion": 0,
+      "retry_triggered": false,
+      "answer_confidence": "N/A (LLM Skipped)",
+      "issue_detected": "No chunks retrieved"
+    }
+  },
+  "Latency": {
+    "avg_ms": 1063.0855000345036,
+    "max_ms": 1754.8325000097975,
+    "timeout_occurred": false
+  },
+  "Context Expansion": {
+    "page_based_success_count": 0,
+    "offset_fallback_success_count": 0
+  },
+  "Reranker": {
+    "definition_boost_active": false
+  },
+  "Validation": {
+    "retry_triggered_count": 0
+  },
+  "Remaining Issues": [
+    "Query 3 Exception: 'Chunk' object has no attribute 'model_dump'",
+    "Query 4 Exception: 'Chunk' object has no attribute 'model_dump'"
+  ]
+}
+
+System Status: NEEDS_FIX

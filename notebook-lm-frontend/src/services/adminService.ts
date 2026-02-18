@@ -109,7 +109,7 @@ const adminService = {
         if (metadata.keywords) formData.append('keywords', metadata.keywords);
 
         return apiClient.post('/api/evilearn/ingest/file', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
+            headers: { 'Content-Type': undefined } as any,
             timeout: 120000,
         });
     },

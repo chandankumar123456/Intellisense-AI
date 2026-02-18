@@ -72,6 +72,8 @@ class VectorRetriever:
                     text = chunk_text,
                     metadata = safe_metadata,
                     source_url = safe_metadata.get('source_url'),
+                    page = int(safe_metadata.get('page', 0)) if safe_metadata.get('page') is not None else None,
+                    section_type = safe_metadata.get('section_type'),
                 )
                 chunk_list.append(chunk)
                 

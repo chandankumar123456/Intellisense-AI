@@ -116,6 +116,7 @@ const AdminPage: React.FC = () => {
 const UploadTab: React.FC = () => {
     const [file, setFile] = useState<File | null>(null);
     const [subject, setSubject] = useState('');
+    const [secondarySubject, setSecondarySubject] = useState('');
     const [topic, setTopic] = useState('');
     const [subtopic, setSubtopic] = useState('');
     const [syllabusKeywords, setSyllabusKeywords] = useState('');
@@ -126,12 +127,14 @@ const UploadTab: React.FC = () => {
     const [difficultyLevel, setDifficultyLevel] = useState('');
     const [sourceTag, setSourceTag] = useState('');
     const [keywords, setKeywords] = useState('');
+    const [confidence, setConfidence] = useState<number | null>(null);
     const [uploading, setUploading] = useState(false);
-    const [recentUploads, setRecentUploads] = useState<{ name: string; docId: string; status: string }[]>([]);
+    const [recentUploads, setRecentUploads] = useState<{ name: string; docId: string; status: string; detectedSubject?: string }[]>([]);
     const [dragOver, setDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const isFormValid = file && subject.trim() && semester.trim() && topic.trim();
+    // Context: Auto-detection allows subject/topic to be empty.
+    const isFormValid = !!file;
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -141,9 +144,14 @@ const UploadTab: React.FC = () => {
     }, []);
 
     const handleUpload = async () => {
-        if (!file) return;
+        console.log("handleUpload called", { file, subject, semester, isFormValid });
+        if (!file) {
+            console.error("No file selected");
+            return;
+        }
         setUploading(true);
         try {
+            console.log("Calling adminService.uploadDocument...");
             const result = await adminService.uploadDocument(file, {
                 subject,
                 topic,
@@ -157,24 +165,46 @@ const UploadTab: React.FC = () => {
                 source_tag: sourceTag,
                 keywords,
             });
+            console.log("Upload result:", result);
+
             toast.success(`${file.name} queued for smart ingestion!`);
+
             setRecentUploads((prev) => [
-                { name: file.name, docId: result.document_id || '', status: 'processing' },
+                {
+                    name: file.name,
+                    docId: result.document_id || '',
+                    status: 'processing',
+                    detectedSubject: result.detected_metadata?.subject
+                },
                 ...prev.slice(0, 9),
             ]);
+
+            if (result.detected_metadata) {
+                toast.success(`Detected: ${result.detected_metadata.subject}`, { icon: '🤖' });
+
+                // Auto-Fill Form for Feedback / Next Upload
+                if (result.detected_metadata.subject) setSubject(result.detected_metadata.subject);
+                if (result.detected_metadata.secondary_subject) setSecondarySubject(result.detected_metadata.secondary_subject);
+                if (result.detected_metadata.content_type) setContentType(result.detected_metadata.content_type);
+                if (result.detected_metadata.confidence) setConfidence(result.detected_metadata.confidence);
+
+                console.log("Auto-filled metadata:", result.detected_metadata);
+            }
+
+            // Clear file but keep metadata for potential reuse/correction
             setFile(null);
-            setSubject('');
             setTopic('');
             setSubtopic('');
             setSyllabusKeywords('');
             setAcademicYear('');
             setSemester('');
             setModule('');
-            setContentType('notes');
             setDifficultyLevel('');
             setSourceTag('');
             setKeywords('');
+            setConfidence(null);
             if (fileInputRef.current) fileInputRef.current.value = '';
+
         } catch (err) {
             toast.error('Upload failed. Please try again.');
         } finally {
@@ -256,6 +286,12 @@ const UploadTab: React.FC = () => {
                         </div>
                         <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                Secondary Subject
+                            </label>
+                            <input className="input-field" value={secondarySubject} onChange={(e) => setSecondarySubject(e.target.value)} placeholder="e.g., Math" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
                                 Semester <span style={{ color: '#EF4444' }}>*</span>
                             </label>
                             <select className="input-field" value={semester} onChange={(e) => setSemester(e.target.value)}>
@@ -270,16 +306,27 @@ const UploadTab: React.FC = () => {
                                 <option value="8">Semester 8</option>
                             </select>
                         </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                         <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
                                 Topic <span style={{ color: '#EF4444' }}>*</span>
                             </label>
                             <input className="input-field" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g., Normalization" />
                         </div>
-                    </div>
-
-                    {/* Optional fields */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                        <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                Confidence
+                            </label>
+                            <input
+                                className="input-field"
+                                value={confidence !== null ? `${(confidence * 100).toFixed(1)}%` : ''}
+                                readOnly
+                                disabled
+                                style={{ opacity: 0.7, cursor: 'not-allowed' }}
+                                placeholder="Auto"
+                            />
+                        </div>
                         <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Academic Year</label>
                             <select className="input-field" value={academicYear} onChange={(e) => setAcademicYear(e.target.value)}>
@@ -290,6 +337,9 @@ const UploadTab: React.FC = () => {
                                 <option value="4th">4th Year</option>
                             </select>
                         </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                         <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Module / Unit</label>
                             <input className="input-field" value={module} onChange={(e) => setModule(e.target.value)} placeholder="e.g., Unit 3" />
@@ -387,37 +437,39 @@ const UploadTab: React.FC = () => {
             </div>
 
             {/* Recent uploads */}
-            {recentUploads.length > 0 && (
-                <div className="liquid-glass rounded-glass" style={{ padding: '16px' }}>
-                    <div className="z-content relative">
-                        <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Recent Uploads</h3>
-                        <div className="space-y-2">
-                            {recentUploads.map((u, i) => (
-                                <div
-                                    key={i}
-                                    className="flex items-center justify-between py-2 px-3 rounded-glass-sm"
-                                    style={{ background: 'var(--glass-surface)' }}
-                                >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <FileText className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--accent-primary)' }} />
-                                        <span className="text-sm truncate" style={{ color: 'var(--text-primary)' }}>{u.name}</span>
-                                    </div>
-                                    <span
-                                        className="text-[11px] font-medium px-2 py-0.5 rounded-pill flex-shrink-0"
-                                        style={{
-                                            background: 'rgba(34,197,94,0.1)',
-                                            color: '#22C55E',
-                                        }}
+            {
+                recentUploads.length > 0 && (
+                    <div className="liquid-glass rounded-glass" style={{ padding: '16px' }}>
+                        <div className="z-content relative">
+                            <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Recent Uploads</h3>
+                            <div className="space-y-2">
+                                {recentUploads.map((u, i) => (
+                                    <div
+                                        key={i}
+                                        className="flex items-center justify-between py-2 px-3 rounded-glass-sm"
+                                        style={{ background: 'var(--glass-surface)' }}
                                     >
-                                        {u.status}
-                                    </span>
-                                </div>
-                            ))}
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <FileText className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--accent-primary)' }} />
+                                            <span className="text-sm truncate" style={{ color: 'var(--text-primary)' }}>{u.name}</span>
+                                        </div>
+                                        <span
+                                            className="text-[11px] font-medium px-2 py-0.5 rounded-pill flex-shrink-0"
+                                            style={{
+                                                background: 'rgba(34,197,94,0.1)',
+                                                color: '#22C55E',
+                                            }}
+                                        >
+                                            {u.status}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

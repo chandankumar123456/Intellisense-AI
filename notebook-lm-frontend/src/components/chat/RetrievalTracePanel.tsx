@@ -49,33 +49,92 @@ const RetrievalTracePanel: React.FC<RetrievalTracePanelProps> = ({ trace, confid
 
       {isExpanded && (
         <div className="p-4 space-y-3 animate-fade-in z-content relative" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-          {trace.retrievers && Object.entries(trace.retrievers).map(([name, data]: [string, any]) => (
-            <div key={name} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-text_secondary flex items-center gap-1.5">
-                  <Zap className="w-3 h-3 text-primary" />{name}
+          {/* Trace ID */}
+          {trace.trace_id && (
+            <div className="text-[10px] text-text_muted font-mono mb-2 flex justify-between">
+              <span>Trace ID: {trace.trace_id}</span>
+              {trace.secondary_retry_triggered && (
+                <span className="text-warning font-bold flex items-center gap-1">
+                  <Zap className="w-3 h-3" /> Retry Triggered
                 </span>
-                {data.num_results !== undefined && (
-                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-pill" style={{ background: 'var(--hover-glow)', color: 'var(--accent-primary)' }}>
-                    {data.num_results} results
-                  </span>
-                )}
-              </div>
-              {data.results?.length > 0 && (
-                <div className="grid gap-1.5 ml-6">
-                  {data.results.map((result: any, idx: number) => (
-                    <div key={idx} className="px-3 py-2 rounded-glass-sm text-xs" style={{ background: 'var(--glass-surface)', border: '1px solid var(--border-subtle)' }}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-text_secondary truncate">{result.source || `Result ${idx + 1}`}</span>
-                        {result.score !== undefined && <span className="text-text_muted ml-2 flex-shrink-0">{(result.score * 100).toFixed(0)}%</span>}
-                      </div>
-                      {result.content && <p className="text-text_muted truncate">{result.content.substring(0, 100)}...</p>}
-                    </div>
-                  ))}
-                </div>
               )}
             </div>
-          ))}
+          )}
+
+          {/* Validation Status */}
+          {trace.retrieval_validation && (
+            <div className={`p-3 rounded-glass-sm bg-opacity-10 border border-border-subtle ${trace.retrieval_validation.is_valid ? 'bg-success/10' : 'bg-warning/10'}`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-xs font-semibold ${trace.retrieval_validation.is_valid ? 'text-text_success' : 'text-text_warning'}`}>
+                  {trace.retrieval_validation.is_valid ? 'Validation Passed' : 'Validation Failed'}
+                </span>
+                <span className="text-[10px] text-text_muted uppercase tracking-wider">
+                  Top Score: {trace.retrieval_validation.top_score?.toFixed(3)}
+                </span>
+              </div>
+              <p className="text-xs text-text_secondary italic">{trace.retrieval_validation.reason}</p>
+            </div>
+          )}
+
+          {/* Results Grid */}
+          {trace.results && (
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(trace.results).map(([key, data]: [string, any]) => {
+                if (!data || key === 'retry_count') return null;
+                return (
+                  <div key={key} className="p-2 rounded-glass-sm border border-border-subtle bg-bg-secondary">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Zap className="w-3 h-3 text-accent-primary" />
+                      <span className="text-xs font-medium capitalize text-text_primary">
+                        {key.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-text_muted">
+                      <span>{data.count || 0} chunks</span>
+                      <span className={`px-1.5 py-0.5 rounded-full ${data.status === 'success' ? 'bg-success/20 text-success' : 'bg-bg-tertiary'}`}>
+                        {data.status}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Top Chunks Viewer */}
+          {trace.top_chunks && trace.top_chunks.length > 0 && (
+            <div className="mt-4">
+              <h4 className="text-xs font-semibold text-text_secondary mb-2">Top Chunks</h4>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                {trace.top_chunks.map((chunk: any, i: number) => (
+                  <div key={i} className="p-2 rounded-glass-sm bg-bg-secondary border border-border-subtle hover:bg-bg-tertiary transition-colors">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-[10px] font-mono text-text_muted truncate max-w-[120px]" title={chunk.chunk_id}>
+                        {chunk.chunk_id.substring(0, 8)}...
+                      </span>
+                      <div className="flex gap-1.5">
+                        <span className="text-[9px] px-1 rounded-full bg-primary/10 text-primary">
+                          {chunk.rerank_score?.toFixed(3)}
+                        </span>
+                        {chunk.definition_score > 0 && (
+                          <span className="text-[9px] px-1 rounded-full bg-info/10 text-info" title="Definition Score">
+                            Def: {chunk.definition_score?.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-text_secondary mb-1 flex gap-2">
+                      <span className="capitalize">{chunk.source_type}</span>
+                      {chunk.section_type && <span className="text-text_muted">• {chunk.section_type}</span>}
+                    </div>
+                    <p className="text-[10px] text-text_muted leading-snug line-clamp-2">
+                      {chunk.text_preview}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

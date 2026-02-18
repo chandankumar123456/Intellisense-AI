@@ -18,6 +18,14 @@ SECTION_PATTERNS = {
         r"(?i)\bintroduction\b",
         r"(?i)\bintro\b",
         r"(?i)\b1\.\s*introduction\b",
+        r"(?i)\boverview\b",
+    ],
+    "definition": [
+        r"(?i)\bdefinitions?\b",
+        r"(?i)\bconcepts?\b",
+        r"(?i)\bterminology\b",
+        r"(?i)\bglosssary\b",
+        r"(?i)\bwhat\s+is\s+",
     ],
     "literature_review": [
         r"(?i)\bliterature\s+review\b",

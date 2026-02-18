@@ -1,3 +1,4 @@
+# storage/metadata.py
 import os
 import sqlite3
 import json
@@ -12,12 +13,14 @@ def _init_schema(conn: sqlite3.Connection):
             id              TEXT PRIMARY KEY,
             doc_id          TEXT NOT NULL,
             subject         TEXT DEFAULT '',
+            secondary_subject TEXT DEFAULT '',
             topic           TEXT DEFAULT '',
             subtopic        TEXT DEFAULT '',
             page            INTEGER DEFAULT 0,
             offset_start    INTEGER DEFAULT 0,
             offset_end      INTEGER DEFAULT 0,
             importance_score REAL DEFAULT 0.0,
+            confidence      REAL DEFAULT 0.0,
             vector_chunk_id TEXT DEFAULT NULL,
             storage_pointer TEXT DEFAULT '',
             source_url      TEXT DEFAULT '',
@@ -41,12 +44,15 @@ def _init_schema(conn: sqlite3.Connection):
 
         CREATE INDEX IF NOT EXISTS idx_doc_id ON chunk_metadata(doc_id);
         CREATE INDEX IF NOT EXISTS idx_section_type ON chunk_metadata(section_type);
+        CREATE INDEX IF NOT EXISTS idx_doc_page ON chunk_metadata(doc_id, page);
     """)
     # ── Migration for existing databases ──
     # If the table already existed before our schema expansion,
     # CREATE TABLE IF NOT EXISTS is a no-op and the new columns won't exist.
     # We must ALTER TABLE to add them individually.
     _migration_cols = [
+        ("secondary_subject", "''"),
+        ("confidence", "0.0"),
         ("section_type", "'body'"),
         ("document_title", "''"),
         ("academic_year", "''"),
@@ -59,12 +65,17 @@ def _init_schema(conn: sqlite3.Connection):
     ]
     for col, default in _migration_cols:
         try:
+            print(f"Migrating column: {col}...")
             conn.execute(f"ALTER TABLE chunk_metadata ADD COLUMN {col} TEXT DEFAULT {default}")
-        except Exception:
-            pass  # Column already exists
+            print(f"Successfully added column: {col}")
+        except Exception as e:
+            # pass  # Column already exists
+            print(f"Column {col} likely exists or error: {e}")
+
     # Create composite index AFTER migration ensures the columns exist
     try:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_subject_semester ON chunk_metadata(subject, semester)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_page ON chunk_metadata(doc_id, page)")
     except Exception:
         pass
     
@@ -81,8 +92,6 @@ def _init_schema(conn: sqlite3.Connection):
 
 class SqliteMetadataImpl:
     """Shared logic for SQLite Metadata"""
-    def __init__(self, db_path: str):
-        self.db_path = db_path
     def __init__(self, db_path: str):
         self.db_path = db_path
         dir_path = os.path.dirname(db_path)
@@ -114,21 +123,23 @@ class SqliteMetadataImpl:
         metadata = self._validate_metadata(metadata)
         self.conn.execute("""
             INSERT OR REPLACE INTO chunk_metadata
-            (id, doc_id, subject, topic, subtopic, page, offset_start, offset_end,
-             importance_score, vector_chunk_id, storage_pointer, source_url,
+            (id, doc_id, subject, secondary_subject, topic, subtopic, page, offset_start, offset_end,
+             importance_score, confidence, vector_chunk_id, storage_pointer, source_url,
              source_type, chunk_text, user_id, is_embedded, section_type, document_title,
              academic_year, semester, module, content_type, difficulty_level, source_tag, keywords)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             metadata.get("id", ""),
             metadata.get("doc_id", ""),
             metadata.get("subject", ""),
+            metadata.get("secondary_subject", ""),
             metadata.get("topic", ""),
             metadata.get("subtopic", ""),
             metadata.get("page", 0),
             metadata.get("offset_start", 0),
             metadata.get("offset_end", 0),
             metadata.get("importance_score", 0.0),
+            metadata.get("confidence", 0.0),
             metadata.get("vector_chunk_id"),
             metadata.get("storage_pointer", ""),
             metadata.get("source_url", ""),
@@ -152,21 +163,23 @@ class SqliteMetadataImpl:
         validated = [self._validate_metadata(m) for m in metadata_list]
         self.conn.executemany("""
             INSERT OR REPLACE INTO chunk_metadata
-            (id, doc_id, subject, topic, subtopic, page, offset_start, offset_end,
-             importance_score, vector_chunk_id, storage_pointer, source_url,
+            (id, doc_id, subject, secondary_subject, topic, subtopic, page, offset_start, offset_end,
+             importance_score, confidence, vector_chunk_id, storage_pointer, source_url,
              source_type, chunk_text, user_id, is_embedded, section_type, document_title,
              academic_year, semester, module, content_type, difficulty_level, source_tag, keywords)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, [(
             m.get("id", ""),
             m.get("doc_id", ""),
             m.get("subject", ""),
+            m.get("secondary_subject", ""),
             m.get("topic", ""),
             m.get("subtopic", ""),
             m.get("page", 0),
             m.get("offset_start", 0),
             m.get("offset_end", 0),
             m.get("importance_score", 0.0),
+            m.get("confidence", 0.0),
             m.get("vector_chunk_id"),
             m.get("storage_pointer", ""),
             m.get("source_url", ""),
@@ -204,6 +217,42 @@ class SqliteMetadataImpl:
         rows = self.conn.execute(query, params).fetchall()
         return [dict(row) for row in rows]
     
+    def get_context_neighbors(self, doc_id: str, page: int, window: int = 1) -> List[Dict[str, Any]]:
+        """
+        Fetch chunks from the same document around specific pages.
+        Used for context expansion.
+        """
+        query = """
+            SELECT * FROM chunk_metadata 
+            WHERE doc_id = ? AND page >= ? AND page <= ?
+            ORDER BY page ASC, offset_start ASC
+            LIMIT 20
+        """
+        min_page = max(0, page - window)
+        max_page = page + window
+        
+        rows = self.conn.execute(query, (doc_id, min_page, max_page)).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_context_neighbors_by_offset(self, doc_id: str, offset_start: int, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Fetch nearest chunks by character offset.
+        Used when page numbers are missing.
+        """
+        # We want chunks surrounding the target offset.
+        # Simple heuristic: sort by distance to offset_start
+        query = """
+            SELECT *, ABS(offset_start - ?) as dist 
+            FROM chunk_metadata 
+            WHERE doc_id = ?
+            ORDER BY dist ASC
+            LIMIT ?
+        """
+        rows = self.conn.execute(query, (offset_start, doc_id, limit)).fetchall()
+        results = [dict(row) for row in rows]
+        # Remove the extra 'dist' column from result dict if we want to be clean, but strictly not necessary
+        return results
+
     def update_keyword_index(self, keyword: str, subject: str, count: int = 1):
         """Update the frequency of a keyword for a given subject."""
         if not keyword or not subject:
@@ -260,6 +309,14 @@ class CloudMetadataStorage(MetadataStorageInterface):
     def search(self, filters: Dict[str, Any], limit: int = 10) -> List[Dict[str, Any]]:
         return self.impl.search(filters, limit)
 
+    def get_context_neighbors(self, doc_id: str, page: int, window: int = 1) -> List[Dict[str, Any]]:
+        return self.impl.get_context_neighbors(doc_id, page, window)
+
+    def get_context_neighbors_by_offset(self, doc_id: str, offset_start: int, limit: int = 10) -> List[Dict[str, Any]]:
+        if hasattr(self.impl, 'get_context_neighbors_by_offset'):
+            return self.impl.get_context_neighbors_by_offset(doc_id, offset_start, limit)
+        return []
+
 class LocalMetadataStorage(MetadataStorageInterface):
     """
     In 'Local' mode, we use a different SQLite file in /local_storage/metadata.db
@@ -279,3 +336,11 @@ class LocalMetadataStorage(MetadataStorageInterface):
     
     def search(self, filters: Dict[str, Any], limit: int = 10) -> List[Dict[str, Any]]:
         return self.impl.search(filters, limit)
+    
+    def get_context_neighbors(self, doc_id: str, page: int, window: int = 1) -> List[Dict[str, Any]]:
+        return self.impl.get_context_neighbors(doc_id, page, window)
+
+    def get_context_neighbors_by_offset(self, doc_id: str, offset_start: int, limit: int = 10) -> List[Dict[str, Any]]:
+        if hasattr(self.impl, 'get_context_neighbors_by_offset'):
+            return self.impl.get_context_neighbors_by_offset(doc_id, offset_start, limit)
+        return []

@@ -21,10 +21,10 @@ import shutil
 from app.core.logging import log_info, log_error
 from app.infrastructure.audit_store import get_audit
 from app.infrastructure.metadata_store import (
-    search_metadata,
     get_promotion_candidates,
     get_eviction_candidates,
 )
+from app.rag.subject_detector import detect_subject
 
 router = APIRouter(prefix="/api/evilearn", tags=["evilearn"])
 
@@ -148,18 +148,15 @@ async def ingest_file(
     Requires: subject, semester, topic (mandatory academic scoping).
     """
     # ── Mandatory academic metadata validation ──
-    missing = []
-    if not subject.strip():
-        missing.append("subject")
-    if not semester.strip():
-        missing.append("semester")
-    if not topic.strip():
-        missing.append("topic")
-    if missing:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Missing mandatory academic metadata: {', '.join(missing)}"
-        )
+    # ── Mandatory academic metadata validation ──
+    # We now allow Subject/Topic to be auto-detected.
+    # We still check for strictly required fields if any, but for now we relax the constraints.
+    pass
+    
+    # missing = []
+    # if not subject.strip():
+    #     missing.append("subject")
+    # ... (removed strict validation)
 
     doc_id = str(uuid.uuid4())
     text = ""
@@ -198,6 +195,32 @@ async def ingest_file(
         # Parse syllabus keywords
         kw_list = [kw.strip() for kw in syllabus_keywords.split(",") if kw.strip()]
 
+        # ── Synchronous Subject Detection (Feedback Loop) ──
+        detected_meta = {}
+        detected_confidence = 0.0
+        detected_secondary = ""
+        
+        if not subject.strip():
+            # Run detection on the first 5k characters
+            log_info(f"Running synchronous subject detection for {file.filename}")
+            detection = detect_subject(text[:5000])
+            if detection.subject:
+                subject = detection.subject
+                detected_confidence = detection.confidence
+                detected_secondary = detection.secondary_subject
+                
+                detected_meta = {
+                    "subject": subject,
+                    "confidence": detected_confidence,
+                    "secondary_subject": detected_secondary,
+                    "content_type": detection.content_type,
+                    "is_ambiguous": detection.is_ambiguous
+                }
+                
+                # Auto-fill content type if not provided
+                if content_type == "notes" and detection.content_type:
+                    content_type = detection.content_type
+
         # Trigger smart ingestion in background
         from app.rag.ingestion_pipeline import ingest_document
         from app.infrastructure.document_store import store_original_file
@@ -222,6 +245,9 @@ async def ingest_file(
                 difficulty_level=difficulty_level.strip(),
                 source_tag=source_tag.strip(),
                 keywords=keywords.strip(),
+                # Pass detected metadata
+                confidence=detected_confidence,
+                secondary_subject=detected_secondary,
             )
 
         background_tasks.add_task(_ingest_with_original)
@@ -231,6 +257,7 @@ async def ingest_file(
             "message": f"File {file.filename} queued for smart ingestion.",
             "document_id": doc_id,
             "estimated_chunks": len(text.split()) // 400,
+            "detected_metadata": detected_meta
         }
 
     except HTTPException:

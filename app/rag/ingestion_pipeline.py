@@ -45,6 +45,9 @@ async def ingest_document(
     difficulty_level: str = "",
     source_tag: str = "",
     keywords: str = "",
+    # Detected metadata overrides
+    confidence: float = 0.0,
+    secondary_subject: str = "",
 ) -> dict:
     """
     Full ingestion pipeline following EviLearn rules.
@@ -79,15 +82,51 @@ async def ingest_document(
                 "difficulty_level": difficulty_level,
                 "source_tag": source_tag,
                 "keywords": keywords,
+                "confidence": confidence,
+                "secondary_subject": secondary_subject,
             }).encode("utf-8"),
             "application/json"
         )
 
-        # 0.5 Dynamic Subject Learning
-        # Extract keywords and update the subject index if a subject is provided
+        # 0.5 Dynamic Subject Learning & Identification
+        # ---------------------------------------------
+        from app.rag.subject_detector import detect_subject
+
+        # 0.5 Dynamic Subject Learning & Identification
+        # ---------------------------------------------
+        from app.rag.subject_detector import detect_subject
+
+        # If subject is provided (e.g. from UI or Router detection), we trust it.
+        # But we might still need content_type or other fields if not provided.
+        if subject:
+             # Just ensure confidence/secondary are recorded if passed
+             pass
+        else:
+            # If subject is NOT provided, try to detect it automatically
+            log_info("Autodetecting subject for document...")
+            # Use text prefix for speed
+            detection = detect_subject(text[:5000])
+            if detection.subject:
+                subject = detection.subject
+                confidence = detection.confidence
+                secondary_subject = detection.secondary_subject
+                
+                log_info(f"Detected subject: '{subject}' (Confidence: {confidence:.2f}, Type: {detection.content_type})")
+                
+                # Update other fields if empty
+                if not content_type and detection.content_type:
+                    content_type = detection.content_type
+                
+                # Append secondary info to keywords if relevant
+                if detection.secondary_subject:
+                     keywords = f"{keywords}, Secondary: {detection.secondary_subject}" if keywords else f"Secondary: {detection.secondary_subject}"
+            else:
+                log_warning("Subject detection returned no result.")
+
+        # Update the subject index with keywords (whether detected or provided)
         if subject:
             try:
-                # automated extraction
+                # automated extraction of more granular keywords
                 extracted_kws = extract_keywords(text)
                 
                 # merge with user provided keywords (syllabus_keywords + keywords param)
@@ -101,8 +140,7 @@ async def ingest_document(
                 all_kws = set(extracted_kws + user_kws)
                 for kw in all_kws:
                     # Increment count for this subject
-                    # We access the impl directly if using one of the wrappers, strictly for this method
-                    # In a cleaner arch we'd expose this on the interface, but for now we cast
+                    # (Implementation wrapper detail)
                     if hasattr(storage_manager.metadata, 'impl'):
                          storage_manager.metadata.impl.update_keyword_index(kw, subject)
                     elif hasattr(storage_manager.metadata, 'update_keyword_index'):
@@ -266,6 +304,8 @@ async def ingest_document(
                 "difficulty_level": chunk.difficulty_level,
                 "source_tag": chunk.source_tag,
                 "keywords": chunk.keywords,
+                "confidence": confidence,
+                "secondary_subject": secondary_subject,
             })
 
         storage_manager.metadata.upsert_batch(metadata_entries)

@@ -1,269 +1,305 @@
 # app/rag/subject_detector.py
 """
-Rule-based subject detection from user queries.
+Automatic Subject Identification for AI/AIML System.
 
-Detects the most likely academic subject from a query string by matching
-against a keyword map. Returns a SubjectScope with confidence score and
-ambiguity flag. No LLM calls — runs in <1ms.
+Uses a hybrid approach:
+1. Keyword Matching (Explicit terminology)
+2. Semantic Similarity (Centroid-based embeddings)
+3. Type Detection (Lab vs Theory)
+
+No runtime LLM calls required.
 """
 
 from pydantic import BaseModel
-from typing import Optional, Dict, List, Set
+from typing import Optional, Dict, List, Set, Tuple
 import re
-
-
-from pydantic import BaseModel
-import time
+import numpy as np
 from app.core.logging import log_info, log_warning
+from app.agents.retrieval_agent.utils import embed_text
 
-# In-memory cache of the subject index
-_INDEX_CACHE: Dict[str, Dict[str, int]] = {}
-_LAST_CACHE_UPDATE: float = 0
-_CACHE_TTL: int = 300  # 5 minutes
+# ── Academic Universe (AI/AIML) ──
+# List from user requirements
+AI_AIML_SUBJECTS = [
+    "Mathematics–I",
+    "Applied Physics",
+    "Programming for Problem Solving–I",
+    "Basic Electrical Engineering",
+    "Applied Physics Lab",
+    "Programming for Problem Solving–I Lab",
+    "Basic Electrical Engineering Lab",
+    "Engineering Workshop",
+    "English Communication Skills Lab",
+    "Mathematics–II",
+    "English",
+    "Engineering Chemistry",
+    "Programming for Problem Solving–II",
+    "Engineering Graphics Lab",
+    "English Language Skills Lab",
+    "Engineering Chemistry Lab",
+    "Programming for Problem Solving–II Lab",
+    "Computer Systems I",
+    "Data Structures",
+    "Python Programming",
+    "Fundamentals of Software Engineering",
+    "Probability and Statistics",
+    "Java Programming",
+    "Python Programming Lab",
+    "Data Structures & Java Lab",
+    "Environmental Studies",
+    "Data Wrangling and Visualization",
+    "Design and Analysis of Algorithms",
+    "Fundamentals of Artificial Intelligence",
+    "Discrete Mathematics",
+    "Database Management Systems",
+    "Soft Skills for Success Lab",
+    "Data Wrangling and Visualization Lab",
+    "Database Management Systems Lab",
+    "Gender Sensitization",
+    "Essentials of Machine Learning",
+    "Computer Systems II",
+    "Web Programming with MEAN",
+    "Entrepreneurship Development",
+    "Computer Systems Lab",
+    "Web Programming with MEAN Lab",
+    "Essentials of Machine Learning Lab",
+    "Quantitative Aptitude and Reasoning",
+    "Automata Theory and Applications",
+    "Information Retrieval Systems",
+    "Computer Vision and Image Processing",
+    "Internet of Things",
+    "Cryptography",
+    "Technical and Business Communication Skills",
+    "Computer Vision and Information Retrieval Systems Lab",
+    "Internet of Things Lab",
+    "Verbal Ability and Critical Reasoning",
+    "Natural Language Processing",
+    "Deep Learning",
+    "Big Data",
+    "Cloud Computing",
+    "Cyber Security",
+    "Natural Language Processing Lab",
+    "Deep Learning Lab",
+    "Industry Oriented Mini Project",
+    "Negotiation Skills"
+]
+
+# Additional manually curated keywords to boost centroids
+# This helps distinguish overlapping subjects (e.g. DL vs ML vs NLP)
+SUBJECT_KEYWORDS_BOOST = {
+    "Mathematics–I": ["calculus", "matrix", "algebra", "differential", "integral", "derivative"],
+    "Mathematics–II": ["vector calculus", "laplace transform", "fourier series", "partial differential"],
+    "Applied Physics": ["quantum", "optics", "semiconductor", "laser", "fiber optics", "electromagnetism"],
+    "Data Structures": ["array", "linked list", "stack", "queue", "tree", "graph", "hashing", "sorting"],
+    "Design and Analysis of Algorithms": ["time complexity", "dynamic programming", "greedy", "backtracking", "np-hard", "divide and conquer"],
+    "Database Management Systems": ["sql", "normalization", "transaction", "acid", "relational", "er diagram", "schema"],
+    "Operating Systems": ["process", "thread", "scheduling", "deadlock", "memory management", "virtual memory", "file system"], # Mapped to Computer Systems I/II if needed, or kept generic
+    "Computer Systems I": ["digital logic", "boolean algebra", "gates", "flip flop", "architecture", "organization"],
+    "Computer Systems II": ["operating system", "process", "scheduling", "memory", "deadlock"],
+    "Fundamentals of Artificial Intelligence": ["search", "agent", "heuristic", "logic", "knowledge representation", "minimax"],
+    "Essentials of Machine Learning": ["regression", "classification", "clustering", "supervised", "unsupervised", "model", "training"],
+    "Deep Learning": ["neural network", "backpropagation", "cnn", "rnn", "activation function", "gradient descent", "layer"],
+    "Natural Language Processing": ["tokenization", "stemming", "lemmatization", "parsing", "sentiment", "nlp", "text"],
+    "Internet of Things": ["sensor", "actuator", "iot", "arduino", "raspberry pi", "embedded", "mqtt"],
+    "Cloud Computing": ["aws", "azure", "virtualization", "iaas", "paas", "saas", "cloud"],
+    "Cyber Security": ["encryption", "decryption", "firewall", "attack", "malware", "security", "cryptography"],
+    "Big Data": ["hadoop", "spark", "mapreduce", "nosql", "volume", "velocity", "variety"],
+    "Python Programming": ["python", "list", "dictionary", "tuple", "pandas", "numpy", "def"],
+    "Java Programming": ["java", "class", "object", "inheritance", "polymorphism", "interface", "exception"],
+    "Soft Skills for Success Lab": ["communication", "resume", "interview", "presentation", "group discussion"],
+    "Economics and Financial Analysis": ["demand", "supply", "market", "cost", "accounting", "ratio"], # If added later
+}
 
 class SubjectScope(BaseModel):
-    """Result of subject detection from a user query."""
-    subject: str = ""                 # Best-match subject name
-    semester: str = ""                # Optional semester narrowing
-    topic: str = ""                   # Optional topic narrowing
-    confidence: float = 0.0           # 0.0–1.0
-    is_ambiguous: bool = False        # True if two+ subjects tie
-    matched_subjects: List[str] = []  # All subjects that matched
+    subject: str = ""
+    secondary_subject: str = ""
+    confidence: float = 0.0
+    content_type: str = "theory"  # "theory", "lab", "tutorial", "other"
+    is_ambiguous: bool = False
+    matched_methods: List[str] = [] # "keyword", "semantic"
+    matched_subjects: List[str] = [] # For logging ambiguity
 
-# ── Dynamic Index Management ──
-
-def _seed_legacy_map(metadata_store):
-    """
-    Seed duplication of the old static map into the DB if empty.
-    This ensures backward compatibility and instant utility on first run.
-    """
-    try:
-        # Minimal seed map to ensure system works out-of-the-box
-        legacy_map = {
-            "DBMS": {
-                "database", "dbms", "sql", "normalization", "er diagram",
-                "relational", "acid", "transaction", "deadlock", "b-tree",
-                "indexing", "schema", "query", "join", "aggregate",
-                "functional dependency", "bcnf", "3nf", "2nf", "1nf",
-                "denormalization", "nosql", "mongodb", "postgre", "mysql",
-                "data model", "relational algebra", "tuple", "attribute",
-            },
-            "Operating Systems": {
-                "os", "operating system", "process", "thread", "cpu scheduling",
-                "deadlock", "semaphore", "mutex", "paging", "segmentation",
-                "virtual memory", "file system", "page replacement",
-                "round robin", "sjf", "fcfs", "priority scheduling",
-                "process synchronization", "critical section", "memory management",
-                "disk scheduling", "ipc", "inter process",
-            },
-            "Data Structures": {
-                "data structure", "array", "linked list", "stack", "queue",
-                "binary tree", "bst", "heap", "graph", "hash table",
-                "sorting", "searching", "traversal", "dfs", "bfs",
-                "dynamic programming", "greedy", "recursion", "tree",
-                "avl", "red black", "trie", "priority queue",
-            },
-            "Computer Networks": {
-                "network", "tcp", "udp", "ip", "osi model", "http",
-                "dns", "routing", "subnet", "mac address", "arp",
-                "lan", "wan", "firewall", "socket", "ethernet",
-                "congestion control", "flow control", "sliding window",
-                "transport layer", "application layer", "network layer",
-            },
-            "Machine Learning": {
-                "machine learning", "ml", "regression", "classification",
-                "neural network", "deep learning", "svm", "knn",
-                "decision tree", "random forest", "gradient descent",
-                "backpropagation", "overfitting", "underfitting",
-                "cross validation", "feature extraction", "clustering",
-                "k-means", "cnn", "rnn", "lstm", "transformer",
-                "nlp", "reinforcement learning", "supervised", "unsupervised",
-            },
-            "Software Engineering": {
-                "software engineering", "sdlc", "agile", "scrum", "waterfall",
-                "uml", "use case", "class diagram", "design pattern",
-                "testing", "unit test", "integration test", "requirement",
-                "spiral model", "v model", "prototype", "coupling",
-                "cohesion", "software architecture", "dfd", "data flow",
-            },
-            "Theory of Computation": {
-                "automata", "toc", "turing machine", "dfa", "nfa",
-                "regular expression", "context free grammar", "cfg",
-                "pushdown automata", "pumping lemma", "chomsky",
-                "halting problem", "decidability", "regular language",
-                "finite automaton", "formal language",
-            },
-            "Compiler Design": {
-                "compiler", "lexer", "parser", "syntax analysis",
-                "semantic analysis", "code generation", "optimization",
-                "lex", "yacc", "token", "grammar", "parse tree",
-                "syntax tree", "intermediate code", "three address code",
-            },
-            "Artificial Intelligence": {
-                "artificial intelligence", "ai", "heuristic", "a star",
-                "minimax", "alpha beta", "knowledge representation",
-                "expert system", "fuzzy logic", "genetic algorithm",
-                "constraint satisfaction", "bayesian network",
-                "search algorithm", "informed search", "uninformed search",
-            },
-            "Digital Electronics": {
-                "digital electronics", "logic gate", "flip flop",
-                "combinational circuit", "sequential circuit", "multiplexer",
-                "decoder", "encoder", "counter", "register",
-                "boolean algebra", "karnaugh map", "k-map",
-            },
-            "Mathematics": {
-                "matrix", "determinant", "eigenvalue", "differential equation",
-                "integration", "differentiation", "laplace", "fourier",
-                "probability", "statistics", "mean", "variance",
-                "linear algebra", "calculus", "discrete mathematics",
-                "graph theory", "combinatorics", "set theory",
-            },
-        }
-        
-        # Check if DB is empty
-        current_index = metadata_store.get_keyword_index()
-        if not current_index:
-            log_info("Seeding subject index with legacy keyword map...")
-            for subject, keywords in legacy_map.items():
-                for kw in keywords:
-                    # We use update_keyword_index to insert
-                    if hasattr(metadata_store, 'update_keyword_index'):
-                         metadata_store.update_keyword_index(kw, subject, count=5) # Boost initial seed
-            log_info("Seeding complete.")
-    except Exception as e:
-        log_warning(f"Failed to seed legacy subject map: {e}")
-
-def _load_index() -> Dict[str, Dict[str, int]]:
-    """
-    Load the keyword index from the database, using a cache.
-    """
-    global _INDEX_CACHE, _LAST_CACHE_UPDATE
+class SubjectDetector:
+    _instance = None
+    _centroids: Dict[str, np.ndarray] = {}
+    _initialized: bool = False
+    _cache: Dict[str, SubjectScope] = {}
     
-    # Check cache
-    if _INDEX_CACHE and (time.time() - _LAST_CACHE_UPDATE < _CACHE_TTL):
-        return _INDEX_CACHE
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(SubjectDetector, cls).__new__(cls)
+        return cls._instance
 
-    try:
-        from app.storage import storage_manager
+    def _initialize(self):
+        """Pre-compute centroids for all subjects."""
+        # Check if already initialized to prevent re-computation
+        if self._initialized and self._centroids:
+            return
+
+        log_info("Initializing SubjectDetector: Computing centroids...")
         
-        # Access the underlying implementation if needed
-        metadata_store = storage_manager.metadata
-        if hasattr(metadata_store, 'impl'):
-            metadata_store = metadata_store.impl
+        # Determine strict list of subjects to embed
+        texts_to_embed = []
+        keys = []
+        
+        for subject in AI_AIML_SUBJECTS:
+            # Construct a rich descriptive string for the subject
+            # Subject Name + Extra Keywords
+            desc = subject
+            if subject in SUBJECT_KEYWORDS_BOOST:
+                desc += " " + " ".join(SUBJECT_KEYWORDS_BOOST[subject])
             
-        # Seed if empty (one-time check essentially)
-        if not _INDEX_CACHE:
-             _seed_legacy_map(metadata_store)
-
-        # Load fresh index
-        if hasattr(metadata_store, 'get_keyword_index'):
-            index = metadata_store.get_keyword_index()
-            if index:
-                _INDEX_CACHE = index
-                _LAST_CACHE_UPDATE = time.time()
-                log_info(f"Loaded subject index with {len(_INDEX_CACHE)} keywords.")
-            return _INDEX_CACHE
+            # Clean "Lab" from description for semantic matching to keep it close to theory
+            # (We handle Lab detection separately via patterns)
+            clean_desc = desc.replace(" Lab", "").replace(" Laboratory", "")
             
-    except Exception as e:
-        log_warning(f"Failed to load subject index: {e}")
-        # Fallback to current cache if DB fails
-        return _INDEX_CACHE or {}
+            texts_to_embed.append(clean_desc)
+            keys.append(subject)
         
-    return {}
+        try:
+            embeddings = embed_text(texts_to_embed)
+            for i, key in enumerate(keys):
+                self._centroids[key] = np.array(embeddings[i])
+            self._initialized = True
+            log_info(f"SubjectDetector initialized with {len(keys)} centroids.")
+        except Exception as e:
+            log_warning(f"Failed to initialize SubjectDetector centroids: {e}")
 
-def detect_subject(query: str) -> SubjectScope:
-    """
-    Detect the academic subject from a query string using the dynamic database index.
+    def detect(self, text: str, existing_embeddings: Optional[List[float]] = None) -> SubjectScope:
+        """
+        Detect subject from text. 
+        If existing_embeddings (of the chunk/doc) is provided, it saves re-computation.
+        This embedding should represent the document (e.g., average of first few chunks).
+        """
+        # Ensure initialized (lazy load if needed, but preferably called at startup)
+        if not self._initialized:
+             self._initialize()
 
-    Strategy:
-      1. Tokenize query (unigrams).
-      2. Sum scores from the inverted index: Score(Subject) += Count(Keyword, Subject).
-      3. Normalize scores and detect ambiguity.
-    """
-    query_lower = query.lower().strip()
-    if not query_lower:
-        return SubjectScope()
+        if not text:
+            return SubjectScope()
 
-    index = _load_index()
-    if not index:
-        return SubjectScope()
+        # Cache check (simple text hash or similar)
+        # For long text, we use a prefix hash
+        text_hash = str(hash(text[:500] + str(len(text))))
+        if text_hash in self._cache:
+             return self._cache[text_hash]
 
-    # Tokenize (simple split by space, rely on index having normalized keys)
-    # Improve this by also checking against known multi-word keys if performance allows,
-    # but for now we stick to unigrams/bigrams if the extractor put them in.
-    # A simple token match is O(N) where N is query length.
-    
-    tokens = [t for t in re.split(r'[^a-z0-9]', query_lower) if t]
-    scores: Dict[str, float] = {}
-    
-    # Generate n-grams (1, 2, 3 words)
-    ngrams_to_check = set()
-    
-    # Unigrams
-    ngrams_to_check.update(tokens)
-    
-    # Bigrams
-    if len(tokens) >= 2:
-        ngrams_to_check.update(" ".join(tokens[i:i+2]) for i in range(len(tokens)-1))
+        # 1. Type Detection (Lab vs Theory)
+        content_type = self._detect_type(text)
+
+        # 2. Candidate Generation via Keyword Matching (Fast Filter)
+        # Check standard keywords + subject names themselves
+        keyword_scores = self._score_keywords(text)
         
-    # Trigrams
-    if len(tokens) >= 3:
-        ngrams_to_check.update(" ".join(tokens[i:i+3]) for i in range(len(tokens)-2))
+        # 3. Semantic Similarity (Centroid Logic)
+        semantic_scores = {}
+        target_embedding = None
+        
+        if existing_embeddings:
+            target_embedding = np.array(existing_embeddings)
+        elif len(text) > 20: # Only embed if enough text
+            try:
+                # Embed just a prefix to save time/tokens if text is huge, 
+                # or rely on the fact that 'text' passed here might be a summary or first chunk
+                target_embedding = np.array(embed_text([text[:1000]])[0]) 
+            except Exception:
+                pass
 
-    # Check against index
-    for ngram in ngrams_to_check:
-        if ngram in index:
-            subject_counts = index[ngram]
-            # Boost multi-word matches slightly as they are more specific
-            # length-based boost: len(ngram.split())
-            boost = len(ngram.split())
+        if target_embedding is not None and self._centroids:
+            for subject, centroid in self._centroids.items():
+                # Cosine similarity
+                sim = np.dot(target_embedding, centroid) / (np.linalg.norm(target_embedding) * np.linalg.norm(centroid) + 1e-9)
+                semantic_scores[subject] = float(sim)
+
+        # 4. Fusion & Decision
+        # Normalize scores
+        final_scores = {}
+        all_subjects = set(keyword_scores.keys()) | set(semantic_scores.keys())
+        
+        for subj in all_subjects:
+            k_score = keyword_scores.get(subj, 0.0)
+            s_score = semantic_scores.get(subj, 0.0)
             
-            for subject, count in subject_counts.items():
-                scores[subject] = scores.get(subject, 0.0) + (count * boost)
+            # Heuristic fusion:
+            # Semantic gives good general direction (0.0-1.0 range usually ~0.3-0.8)
+            # Keywords give precise hits (integers, normalized to 0-1 range roughly)
+            
+            # Normalize keyword score (cap at 5 hits = 1.0)
+            k_norm = min(k_score / 5.0, 1.0)
+            
+            # Boost matches that align with the detected content type
+            # e.g., if type is 'lab' and subject is 'Applied Physics Lab', boost it
+            # vs 'Applied Physics' (theory)
+            type_boost = 0.0
+            if "Lab" in subj and content_type == "lab":
+                type_boost = 0.2
+            elif "Lab" not in subj and content_type != "lab":
+                 type_boost = 0.1
+            
+            # Weighted sum
+            # If we have keywords, we trust them a bit more for specificity
+            score = (0.4 * k_norm) + (0.6 * s_score) + type_boost
+            
+            final_scores[subj] = score
 
-    if not scores:
-        return SubjectScope()
+        if not final_scores:
+             return SubjectScope(content_type=content_type)
 
-    # Sort by score descending
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    best_subject, best_score = ranked[0]
-    matched_subjects = [s for s, _ in ranked if s]
-
-    # Check for ambiguity (top two subjects within 10% score)
-    is_ambiguous = False
-    if len(ranked) >= 2:
-        second_score = ranked[1][1]
-        if second_score >= best_score * 0.9:
-            is_ambiguous = True
-
-    # Confidence calculation
-    # Normalized against the sum of all scores? Or raw strength?
-    # Let's use softmax-like ratio: score / sum(top 3 scores)
-    top_3_sum = sum(s for _, s in ranked[:3])
-    confidence = best_score / (top_3_sum if top_3_sum > 0 else 1)
-
-    return SubjectScope(
-        subject=best_subject,
-        confidence=min(confidence, 1.0),
-        is_ambiguous=is_ambiguous,
-        matched_subjects=matched_subjects,
-    )
-
-def extend_keyword_map(subject: str, keywords: List[str]) -> None:
-    """
-    Legacy compatibility. Just updates the DB index.
-    """
-    try:
-        from app.storage import storage_manager
-        metadata_store = storage_manager.metadata.impl if hasattr(storage_manager.metadata, 'impl') else storage_manager.metadata
+        # Sort
+        ranked = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
+        best_subj, best_score = ranked[0]
         
-        for kw in keywords:
-            if hasattr(metadata_store, 'update_keyword_index'):
-                metadata_store.update_keyword_index(kw, subject)
-                
-        # Invalidate cache to force reload next time
-        global _LAST_CACHE_UPDATE
-        _LAST_CACHE_UPDATE = 0
-    except Exception:
-        pass
+        # Secondary
+        second_subj = ""
+        is_ambiguous = False
+        matched_subjects = [best_subj]
+
+        if len(ranked) > 1:
+            second_subj = ranked[1][0]
+            if ranked[1][1] >= best_score * 0.85: # 15% margin
+                is_ambiguous = True
+                matched_subjects.append(second_subj)
+
+        return SubjectScope(
+            subject=best_subj,
+            secondary_subject=second_subj,
+            confidence=min(best_score, 1.0), # Cap at 1.0
+            content_type=content_type,
+            is_ambiguous=is_ambiguous,
+            matched_methods=["keyword" if keyword_scores else "", "semantic" if semantic_scores else ""],
+            matched_subjects=matched_subjects
+        )
+
+    def _detect_type(self, text: str) -> str:
+        text_lower = text.lower()[:2000] # Check start of doc
+        if "lab manual" in text_lower or "experiment no" in text_lower or \
+           "list of experiments" in text_lower or "program no" in text_lower or \
+            "practical" in text_lower:
+            return "lab"
+        return "theory"
+
+    def _score_keywords(self, text: str) -> Dict[str, float]:
+        scores = {}
+        text_lower = text.lower()
+        
+        # 1. Direct Subject Name Match
+        for subj in AI_AIML_SUBJECTS:
+            # Clean name for matching (escape regex)
+            # Matches exact subject name in text? Highly likely.
+            pattern = re.escape(subj.lower())
+            if re.search(r'\b' + pattern + r'\b', text_lower):
+                scores[subj] = scores.get(subj, 0) + 3.0 # Strong signal
+
+        # 2. Keyword Boost
+        for subj, keywords in SUBJECT_KEYWORDS_BOOST.items():
+            for kw in keywords:
+                if kw in text_lower: # Simple substring check for speed
+                    scores[subj] = scores.get(subj, 0) + 1.0
+                    
+        return scores
+
+# Helper function to expose singleton easily
+def detect_subject(text: str, embeddings: Optional[List[float]] = None) -> SubjectScope:
+    detector = SubjectDetector()
+    return detector.detect(text, embeddings)
+# Alias for backward compatibility if needed, though detect_subject is the primary one now
+detect_subject_v2 = detect_subject

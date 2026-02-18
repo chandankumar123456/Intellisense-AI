@@ -205,16 +205,61 @@ class PipelineControllerAgent:
         # ======================
         # 1.7 SUBJECT SCOPE DETECTION (rule-based, no LLM)
         # ======================
+        # Import SubjectScope for fallback creation
+        from app.rag.subject_detector import detect_subject, SubjectScope
         subject_scope = detect_subject(query)
+        
+        # FIX: Confidence-Aware Subject Filtering
+        # If subject confidence is low, we disable strict filtering to avoid missing relevant docs.
+        SUBJECT_CONFIDENCE_THRESHOLD = 0.45
+        search_scope = subject_scope
+        
+        if subject_scope.subject and subject_scope.confidence < SUBJECT_CONFIDENCE_THRESHOLD:
+            log_info(f"Subject '{subject_scope.subject}' low confidence ({subject_scope.confidence:.2f} < {SUBJECT_CONFIDENCE_THRESHOLD}). Disabling strict filtering.")
+            search_scope = SubjectScope(
+                subject="", # Disable filtering
+                confidence=subject_scope.confidence,
+                is_ambiguous=True,
+                content_type=subject_scope.content_type,
+                secondary_subject=subject_scope.secondary_subject
+            )
+            warnings.append("low_conf_subject_filter_disabled")
+
         log_info(
-            f"Subject scope: subject='{subject_scope.subject}', "
-            f"confidence={subject_scope.confidence:.2f}, "
-            f"ambiguous={subject_scope.is_ambiguous}"
+            f"Subject scope: detected='{subject_scope.subject}', "
+            f"used='{search_scope.subject}', "
+            f"confidence={subject_scope.confidence:.2f}"
         )
+        
         trace["subject_scope"] = subject_scope.model_dump()
         if subject_scope.is_ambiguous:
             warnings.append("ambiguous_subject_scope")
 
+        # ======================
+        # 1.8 QUERY STRUCTURAL CLASSIFICATION (Advanced)
+        # ======================
+        # ======================
+        # 1.8 QUERY STRUCTURAL CLASSIFICATION (Advanced)
+        # ======================
+        from app.rag.query_classifier import query_classifier, QueryType
+        query_type_result = query_classifier.classify(query)
+        log_info(f"Query Structure: {query_type_result.query_type.value} (conf={query_type_result.confidence})")
+        trace["query_structure"] = query_type_result.model_dump()
+        
+        # FIX: Conceptual Query Handling
+        # If query is conceptual, we expand it with definition keywords to boost semantic matching of explanation paragraphs.
+        is_conceptual = False
+        if query_type_result.query_type == QueryType.CONCEPTUAL:
+            is_conceptual = True
+            # Appending definition anchors directly to the retrieval query
+            # This helps vector search find "definition of X" or "concept of X"
+            if "definition" not in effective_query.lower() and "concept" not in effective_query.lower():
+                effective_query += " definition concept principle architecture"
+                log_info(f"Conceptual query detected. Expanded query: '{effective_query}'")
+        
+        # Future: Use query_type to adjust retrieval strategy
+        # e.g. if query_type == QueryType.FACT_VERIFICATION -> enable_verification_agent = True
+        
         # ======================
         # 2. RETRIEVAL (section-aware + subject-scoped)
         # ======================
@@ -227,19 +272,43 @@ class PipelineControllerAgent:
             self.retrieval_agent_input = RetrievalInput(
                 user_id=user_id,
                 session_id=session_id,
-                rewritten_query=effective_query,  # Use intent-aware query
+                rewritten_query=effective_query,  # Use intent-aware query (potentially expanded)
                 retrievers_to_use=self.query_understanding_output.retrievers_to_use,
                 retrieval_params=converted_params,
                 conversation_history=conversation_history,
-                preferences=preferences
+                preferences=preferences,
+                is_conceptual=is_conceptual # Pass flag to orchestrator
             )
 
             self.retrieval_agent_output: RetrievalOutput = \
                 await self.retriever_orchestrator.run(
                     self.retrieval_agent_input,
                     intent_result=intent_result,  # Pass intent for section-aware retrieval
-                    subject_scope=subject_scope,  # Pass subject scope for filtering
+                    subject_scope=search_scope,  # Pass potentially broadened scope
                 )
+            
+            # FIX: Automatic Fallback for Subject Filtering
+            # If we applied a subject filter and got ZERO results, strictly fallback to global search.
+            if search_scope.subject and len(self.retrieval_agent_output.chunks) == 0:
+                log_info("Subject-scoped retrieval returned 0 chunks. TRIGGERING FALLBACK: Global Search.")
+                warnings.append("subject_filter_fallback_triggered")
+                
+                fallback_scope = SubjectScope(
+                    subject="", 
+                    is_ambiguous=True,
+                    content_type=search_scope.content_type
+                )
+                
+                # Retry with global scope
+                self.retrieval_agent_output = await self.retriever_orchestrator.run(
+                    self.retrieval_agent_input,
+                    intent_result=intent_result,
+                    subject_scope=fallback_scope
+                )
+                
+                # Update trace to indicate fallback happened
+                if self.retrieval_agent_output.retrieval_trace:
+                     self.retrieval_agent_output.retrieval_trace["fallback_triggered"] = True
 
         except Exception as e:
             warnings.append(f"Retrieval failed: {e}")
@@ -257,38 +326,81 @@ class PipelineControllerAgent:
             intent_result=intent_result,
         )
 
-        # Only retry if we have SOME chunks but they're weak (partial results).
-        # If zero chunks were found, a retry won't help — skip to save latency.
-        if (not validation.is_valid
-                and validation.should_retry
-                and len(self.retrieval_agent_output.chunks) > 0):
-            log_info(f"Retrieval validation failed: {validation.reason}. Retrying with expanded query...")
+        # ======================
+        # 2.5 DYNAMIC RETRIEVAL LOOP (Agentic Orchestration)
+        # ======================
+        # We loop to improve retrieval quality if the initial attempt is weak.
+        # Strategies:
+        # 1. Initial attempt (Strict subject, standard params)
+        # 2. Query Relaxation (broader query, lower thresholds)
+        # 3. Parameter Expansion (higher top_k)
+        
+        max_attempts = 3
+        attempt = 1
+        best_output = self.retrieval_agent_output
+        best_validation = validation
+        
+        while attempt < max_attempts and not best_validation.is_valid and best_validation.should_retry:
+            if len(self.retrieval_agent_output.chunks) == 0:
+                # If we found NOTHING, a simple retry might not help unless we change the query significantly.
+                # For now, we break to avoid wasted cycles, unless we want to try a very broad fallback.
+                break
+
+            log_info(f"Retrieval attempt {attempt} failed validation: {best_validation.reason}. Starting attempt {attempt+1}...")
+            attempt += 1
+            
+            # Dynamic Strategy Selection based on failure reason
+            # strategy = "relax_query"
+            
             try:
-                retry_query = rewritten_for_retrieval if effective_query != rewritten_for_retrieval else f"{effective_query} detailed content information"
+                # Create a relaxed query or parameters
+                retry_query = rewritten_for_retrieval
+                if "detailed content" not in retry_query:
+                     retry_query += " detailed context"
+                
+                # Relax retrieval parameters (fetch more candidates)
+                relaxed_params = converted_params.model_copy()
+                relaxed_params.top_k_vector += 5
+                relaxed_params.top_k_keyword += 3
+
                 retry_input = RetrievalInput(
                     user_id=user_id,
                     session_id=session_id,
                     rewritten_query=retry_query,
                     retrievers_to_use=self.query_understanding_output.retrievers_to_use,
-                    retrieval_params=converted_params,
+                    retrieval_params=relaxed_params,
                     conversation_history=conversation_history,
                     preferences=preferences
                 )
+                
+                # We reuse the same intent/subject for now, but in a more advanced version we could relax those too.
                 retry_output = await self.retriever_orchestrator.run(
-                    retry_input, intent_result=intent_result
+                    retry_input, 
+                    intent_result=intent_result,
+                    subject_scope=subject_scope
                 )
+                
                 retry_validation = validate_retrieval(
                     chunks=retry_output.chunks,
                     intent_result=intent_result,
                 )
-                if retry_validation.top_score > validation.top_score:
+                
+                # Greedy selection: if it looks better, take it
+                if retry_validation.top_score > best_validation.top_score:
+                    log_info(f"Attempt {attempt} improved score: {best_validation.top_score:.3f} -> {retry_validation.top_score:.3f}")
                     self.retrieval_agent_output = retry_output
-                    validation = retry_validation
-                    log_info("Retry improved results, using retried output.")
+                    best_validation = retry_validation
+                    converted_params = relaxed_params # Update params for trace if needed
                 else:
-                    log_info("Retry did not improve results, keeping original.")
+                    log_info(f"Attempt {attempt} did not improve score ({retry_validation.top_score:.3f} vs {best_validation.top_score:.3f}).")
+            
             except Exception as e:
-                warnings.append(f"Retrieval retry failed: {e}")
+                warnings.append(f"Retrieval attempt {attempt} error: {e}")
+                log_error(f"Retrieval loop error: {e}")
+                break
+
+        validation = best_validation # Ensure final validation is the best one
+
 
         trace["retrieval_validation"] = {
             "is_valid": validation.is_valid,

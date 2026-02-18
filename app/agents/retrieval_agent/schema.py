@@ -19,6 +19,7 @@ class RetrievalInput(BaseModel):
     retrieval_params: RetrievalParams
     conversation_history: List[str] = []
     preferences: dict
+    is_conceptual: bool = False
     
 class Chunk(BaseModel):
     chunk_id: Optional[str]
@@ -28,6 +29,8 @@ class Chunk(BaseModel):
     source_url: Optional[str] = None
     start_time: Optional[float] = None
     end_time: Optional[float] = None
+    page: Optional[int] = None
+    section_type: Optional[str] = None
     metadata: Optional[dict] = None
     raw_score: float              
     normalized_score: float = 0.0
