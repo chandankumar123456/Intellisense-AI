@@ -16,7 +16,7 @@ import os
 import glob
 import json
 
-from app.core.config import DOCUMENT_STORAGE_PATH, AUDIT_LOG_PATH
+from app.core.config import AUDIT_LOG_PATH
 from app.core.logging import log_info, log_error
 from app.core.admin_auth import require_admin
 

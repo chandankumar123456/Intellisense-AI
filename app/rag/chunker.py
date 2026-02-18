@@ -16,6 +16,7 @@ from app.core.config import (
 )
 from app.rag.schemas import ChunkCandidate
 from app.core.logging import log_info
+from app.rag.section_detector import detect_sections_batch
 
 
 def _estimate_tokens(text: str) -> int:
@@ -32,6 +33,7 @@ def chunk_text_smart(
     page: int = 0,
     chunk_size: int = CHUNK_SIZE_TOKENS,
     overlap: int = CHUNK_OVERLAP_TOKENS,
+    document_title: str = "",
 ) -> List[ChunkCandidate]:
     """
     Split text into overlapping chunks with metadata.
@@ -77,6 +79,7 @@ def chunk_text_smart(
             source_url=source_url,
             source_type=source_type,
             user_id=user_id,
+            document_title=document_title,
         )
         chunks.append(candidate)
 
@@ -86,6 +89,15 @@ def chunk_text_smart(
         start = end - word_overlap
 
     log_info(f"Chunked doc {doc_id}: {len(chunks)} chunks from {len(words)} words")
+
+    # Detect section types for all chunks
+    if chunks:
+        chunk_texts = [c.text for c in chunks]
+        section_types = detect_sections_batch(chunk_texts)
+        for chunk, section_type in zip(chunks, section_types):
+            chunk.section_type = section_type
+        log_info(f"Section detection: {dict(zip([c.id for c in chunks[:5]], section_types[:5]))}...")
+
     return chunks
 
 

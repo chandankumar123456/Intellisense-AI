@@ -102,6 +102,8 @@ class ChunkCandidate(BaseModel):
     subtopic: str = ""
     user_id: str = ""
     should_embed: bool = False
+    section_type: str = "body"
+    document_title: str = ""
 
 
 # ── Confidence sub-scores (for audit) ──

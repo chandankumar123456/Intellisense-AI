@@ -141,6 +141,10 @@ async def ingest_file(
             shutil.copyfileobj(file.file, tmp)
             tmp_path = tmp.name
 
+        # Read raw bytes for original file storage (S3 or local)
+        with open(tmp_path, "rb") as rb:
+            original_bytes = rb.read()
+
         try:
             if file.filename.lower().endswith(".pdf"):
                 from pypdf import PdfReader
@@ -167,18 +171,24 @@ async def ingest_file(
 
         # Trigger smart ingestion in background
         from app.rag.ingestion_pipeline import ingest_document
-        background_tasks.add_task(
-            ingest_document,
-            text=text,
-            doc_id=doc_id,
-            source_url=file.filename,
-            source_type="pdf" if file.filename.lower().endswith(".pdf") else "note",
-            user_id=user_id,
-            syllabus_keywords=kw_list,
-            subject=subject,
-            topic=topic,
-            subtopic=subtopic,
-        )
+        from app.infrastructure.document_store import store_original_file
+
+        async def _ingest_with_original():
+            """Upload original file then run smart ingestion."""
+            store_original_file(doc_id, file.filename, original_bytes)
+            await ingest_document(
+                text=text,
+                doc_id=doc_id,
+                source_url=file.filename,
+                source_type="pdf" if file.filename.lower().endswith(".pdf") else "note",
+                user_id=user_id,
+                syllabus_keywords=kw_list,
+                subject=subject,
+                topic=topic,
+                subtopic=subtopic,
+            )
+
+        background_tasks.add_task(_ingest_with_original)
 
         return {
             "status": "processing",

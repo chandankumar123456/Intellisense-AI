@@ -96,7 +96,7 @@ def upsert_records_sync(records):
     except Exception as e:
         log_error(f"Upsert failed: {e}")
 
-async def process_and_index(text: str, source_url: str, source_type: str, user_id: str, doc_id: str):
+async def process_and_index(text: str, source_url: str, source_type: str, user_id: str, doc_id: str, document_title: str = ""):
     try:
         chunks = chunk_text(text)
         records = []
@@ -189,7 +189,8 @@ async def ingest_file(
             raise HTTPException(400, "Could not extract text from file.")
 
         # Trigger background indexing
-        background_tasks.add_task(process_and_index, text, file.filename, "file", user_id, doc_id)
+        document_title = os.path.splitext(file.filename)[0]  # Strip extension for clean title
+        background_tasks.add_task(process_and_index, text, file.filename, "file", user_id, doc_id, document_title)
         
         return IngestResponse(
             status="processing",

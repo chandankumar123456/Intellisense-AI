@@ -1,0 +1,14 @@
+2026-02-18 08:23:39,605 | INFO | trace_id=none | Switching storage mode from aws to local
+2026-02-18 08:23:39,607 | INFO | trace_id=none | Starting ingestion for doc test_doc_repro_1 (66 chars)
+2026-02-18 08:23:39,607 | INFO | trace_id=none | Initializing StorageManager in local mode
+INFO:chromadb.telemetry.product.posthog:Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2026-02-18 08:23:41,721 | INFO | trace_id=none | Storage adapters initialized successfully
+2026-02-18 08:23:41,723 | INFO | trace_id=none | Chunked doc test_doc_repro_1: 0 chunks from 11 words
+2026-02-18 08:23:41,723 | WARNING | trace_id=none | No chunks created for doc test_doc_repro_1
+--- Testing Ingestion ---
+Storage Mode: local
+Test Chunk Score: 0.015
+Threshold: 0.05
+WARNING: Test chunk would be skipped!
+Ingesting doc: test_doc_repro_1
+Ingestion Result: {'status': 'empty', 'chunks_total': 0, 'chunks_embedded': 0}

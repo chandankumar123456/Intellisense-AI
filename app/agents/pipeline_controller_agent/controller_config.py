@@ -36,6 +36,14 @@ FALLBACK_QUERY_UNDERSTANDING_FAILURE: str = (
     "Try rephrasing or providing more details."
 )
 
+FALLBACK_NO_KNOWLEDGE: str = (
+    "I don't have any relevant information about that topic in the available documents. "
+    "Try uploading related documents or rephrasing your question."
+)
+
+# Minimum relevance score threshold — below this, treat as no-knowledge
+NO_KNOWLEDGE_SCORE_THRESHOLD: float = 0.15
+
 ENABLE_DEBUG_LOGS: bool = True
 TRACE_INCLUDE_PROMPT_HASH: bool = True
 TRACE_INCLUDE_MODEL_OUTPUT_HASH: bool = True

@@ -23,16 +23,22 @@ class VectorRetriever:
                 return []
 
             # Use standard Pinecone query
+            # Use SAL query (which delegates to Pinecone or Chroma)
+            # SAL returns List[Dict] (matches list), whereas Pinecone returns Dict with 'matches' key.
+            # We need to adapt based on what we get, or just assume SAL returns matches.
+            # My SAL implementation of query() returns List[Dict] (matches).
+            
             results = await asyncio.to_thread(
                 self.vector_db_client.query,
                 namespace=namespace,
                 vector=query_vector,
                 top_k=top_k,
-                include_metadata=True
+                # include_metadata=True # Implied by SAL implementation usually, but keeps arg if compatible
             )
 
             chunk_list = []
-            matches = results.get('matches', [])
+            # SAL returns the matches list directly
+            matches = results if isinstance(results, list) else results.get('matches', [])
             
             if not matches:
                 log_warning(f"Vector search returned no results for query: '{query}'")
@@ -45,14 +51,26 @@ class VectorRetriever:
                     log_warning(f"Match missing 'chunk_text' in metadata: {match.get('id', 'unknown')}")
                     continue
                 
+                # Defensive extraction for source_type
+                raw_source = match.get('metadata', {}).get('source_type', 'note')
+                if raw_source not in ["pdf", "web", "youtube", "note"]:
+                    log_warning(f"Invalid source_type '{raw_source}' for chunk {match.get('id')}. Defaulting to 'note'.")
+                    safe_source = "note"
+                else:
+                    safe_source = raw_source
+
+                # Use the full metadata dict from the match
+                full_metadata = match.get('metadata', {})
+                safe_metadata = full_metadata if isinstance(full_metadata, dict) else {}
+
                 chunk = Chunk(
                     chunk_id= match.get('id', ''),
-                    document_id=match.get('metadata', {}).get('doc_id', ''),
-                    source_type= match.get('metadata', {}).get('source_type', 'note'),
+                    document_id=safe_metadata.get('doc_id', ''),
+                    source_type= safe_source,
                     raw_score=match.get('score', 0.0),
                     text = chunk_text,
-                    metadata = match.get('metadata', {}).get("category"),
-                    source_url = match.get('metadata', {}).get('source_url')
+                    metadata = safe_metadata,
+                    source_url = safe_metadata.get('source_url'),
                 )
                 chunk_list.append(chunk)
                 

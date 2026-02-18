@@ -19,6 +19,7 @@ from app.api.routes.verification_router import router as verification_router
 from app.api.routes.ingestion_router import router as ingestion_router
 from app.api.routes.evilearn_router import router as evilearn_router
 from app.api.routes.admin_router import router as admin_router
+from app.api.routes.admin_storage_router import router as admin_storage_router
 
 from app.core.logging import log_info, log_error
 auth_scheme = APIKeyHeader(name="Authorization", auto_error=False)
@@ -53,6 +54,7 @@ app.include_router(verification_router)
 app.include_router(ingestion_router)
 app.include_router(evilearn_router)
 app.include_router(admin_router)
+app.include_router(admin_storage_router) # Added include_router
 
 def custom_openapi():
     if app.openapi_schema:

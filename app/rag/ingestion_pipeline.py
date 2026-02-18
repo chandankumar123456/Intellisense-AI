@@ -21,8 +21,9 @@ from app.core.logging import log_info, log_error, log_warning
 from app.rag.schemas import ChunkCandidate
 from app.rag.chunker import chunk_text_smart, deduplicate_chunks
 from app.rag.importance_scorer import compute_importance, should_embed
-from app.infrastructure.metadata_store import upsert_metadata_batch
-from app.infrastructure.document_store import store_document
+from app.core.config import STORAGE_BACKEND, S3_BUCKET_NAME, S3_DOCUMENT_PREFIX, STORAGE_MODE
+# from app.infrastructure.metadata_store import upsert_metadata_batch # Removed
+# from app.infrastructure.document_store import store_document, store_original_file # Removed
 
 
 async def ingest_document(
@@ -36,6 +37,7 @@ async def ingest_document(
     subject: str = "",
     topic: str = "",
     subtopic: str = "",
+    document_title: str = "",
 ) -> dict:
     """
     Full ingestion pipeline following EviLearn rules.
@@ -45,15 +47,27 @@ async def ingest_document(
     try:
         log_info(f"Starting ingestion for doc {doc_id} ({len(text)} chars)")
 
-        # 0. Store full document in Layer-2
-        store_document(doc_id, text, {
-            "source_url": source_url,
-            "source_type": source_type,
-            "user_id": user_id,
-            "subject": subject,
-            "topic": topic,
-            "subtopic": subtopic,
-        })
+        # 0. Store full document via SAL
+        from app.storage import storage_manager
+        
+        storage_manager.files.save_file(
+            f"{doc_id}/text.txt", 
+            text.encode("utf-8"), 
+            "text/plain"
+        )
+        import json
+        storage_manager.files.save_file(
+            f"{doc_id}/meta.json", 
+            json.dumps({
+                "source_url": source_url,
+                "source_type": source_type,
+                "user_id": user_id,
+                "subject": subject,
+                "topic": topic,
+                "subtopic": subtopic,
+            }).encode("utf-8"),
+            "application/json"
+        )
 
         # 1. Create candidate chunks
         candidates = chunk_text_smart(
@@ -62,6 +76,7 @@ async def ingest_document(
             source_url=source_url,
             source_type=source_type,
             user_id=user_id,
+            document_title=document_title,
         )
 
         if not candidates:
@@ -91,13 +106,28 @@ async def ingest_document(
             chunk.subtopic = subtopic
 
         # 5. Embed and upsert only qualifying chunks
+        # Rule: Embed if score >= THRESHOLD, OR if teacher tagged.
+        # Fallback: If ZERO chunks qualify, embed the top 3 by score to ensure *something* is searchable.
+        
         embed_candidates = [c for c in candidates if c.should_embed]
-        embed_embeddings = [
-            embeddings[i] for i, c in enumerate(candidates) if c.should_embed
-        ]
+        
+        if not embed_candidates and candidates:
+            # Fallback strategy
+            log_warning(f"No chunks received score >= {IMPORTANCE_EMBED_THRESHOLD}. Forcing embed of top 3 chunks.")
+            # Sort by importance descending
+            sorted_candidates = sorted(candidates, key=lambda x: x.importance_score, reverse=True)
+            embed_candidates = sorted_candidates[:3]
+            for c in embed_candidates:
+                c.should_embed = True # Mark as embedded for metadata logic
+
+        embed_embeddings = []
+        if embed_candidates:
+             # Optimization: We already computed embeddings for ALL chunks in step 2 for deduplication.
+             # We can just map them.
+             candidate_to_embedding = {c.id: embeddings[i] for i, c in enumerate(candidates)}
+             embed_embeddings = [candidate_to_embedding[c.id] for c in embed_candidates]
 
         if embed_candidates:
-            from app.agents.retrieval_agent.utils import index
             vectors = []
             for i, chunk in enumerate(embed_candidates):
                 chunk.id = chunk.id or f"{doc_id}_{chunk.page}_{i}"
@@ -117,20 +147,42 @@ async def ingest_document(
                         "importance_score": chunk.importance_score,
                         "subject": chunk.subject,
                         "topic": chunk.topic,
+                        "subtopic": chunk.subtopic or "",
+                        "section_type": chunk.section_type,
+                        "document_title": chunk.document_title,
                     },
                 })
 
             await asyncio.to_thread(
-                index.upsert, vectors=vectors, namespace=PINECONE_NAMESPACE
+                storage_manager.vectors.upsert, vectors=vectors, namespace=PINECONE_NAMESPACE
             )
             log_info(
-                f"Embedded {len(embed_candidates)}/{len(candidates)} chunks "
-                f"(importance >= {IMPORTANCE_EMBED_THRESHOLD})"
+                f"Embedded {len(embed_candidates)}/{len(candidates)} chunks. "
+                f"(Threshold: {IMPORTANCE_EMBED_THRESHOLD}, Fallback used: {'Yes' if not any(c.importance_score >= IMPORTANCE_EMBED_THRESHOLD for c in embed_candidates) else 'No'})"
             )
 
         # 6. Create metadata entries for ALL chunks (embedded + raw)
         metadata_entries = []
         for i, chunk in enumerate(candidates):
+            # If we don't know the exact path prefix here easily without asking the file storage, 
+            # we can just store the doc_id and let the retriever resolve it via SAL.
+            # But the prompt required "local://..." or "s3://...".
+            # The SAL save_file returns the full path/URI. 
+            # We didn't capture it above for the main doc, but we know the pattern.
+            # Let's ask the storage manager's file adapter for the scheme/prefix if needed, 
+            # or just rely on the stored doc_id. 
+            # However, existing metadata has `storage_pointer`.
+            # Let's reconstruct it or simplify.
+            
+            # Since we are using SAL, `storage_pointer` is less critical if we fetch via SAL using doc_id.
+            # But to maintain data shape:
+            from app.core.config import STORAGE_MODE
+            storage_pointer = (
+                f"s3://{S3_BUCKET_NAME}/{S3_DOCUMENT_PREFIX}/{doc_id}"
+                if STORAGE_MODE == "aws"
+                else f"local://{doc_id}"
+            )
+            
             metadata_entries.append({
                 "id": chunk.id or f"{doc_id}_{chunk.page}_{i}",
                 "doc_id": chunk.doc_id,
@@ -142,15 +194,17 @@ async def ingest_document(
                 "offset_end": chunk.offset_end,
                 "importance_score": chunk.importance_score,
                 "vector_chunk_id": chunk.id if chunk.should_embed else None,
-                "storage_pointer": f"local://{doc_id}",
+                "storage_pointer": storage_pointer,
                 "source_url": chunk.source_url,
                 "source_type": chunk.source_type,
                 "chunk_text": chunk.text,
                 "user_id": chunk.user_id,
                 "is_embedded": chunk.should_embed,
+                "section_type": chunk.section_type,
+                "document_title": chunk.document_title,
             })
 
-        upsert_metadata_batch(metadata_entries)
+        storage_manager.metadata.upsert_batch(metadata_entries)
         log_info(f"Metadata indexed for all {len(metadata_entries)} chunks")
 
         return {

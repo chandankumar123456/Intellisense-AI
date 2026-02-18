@@ -1,0 +1,137 @@
+2026-02-18 09:06:16,904 | WARNING | trace_id=none | Retrieval quality low: top_score=0.100 < threshold=0.3
+2026-02-18 09:06:16,904 | INFO | trace_id=none | Retrieval validated: top_score=0.800, section_matches=1, document_matches=1
+2026-02-18 09:06:16,904 | WARNING | trace_id=none | Section mismatch: looking for 'abstract' but no chunks have matching section_type
+2026-02-18 09:06:16,904 | INFO | trace_id=none | Retrieval validated: top_score=0.800, section_matches=0, document_matches=1
+============================================================
+  Intent-Aware Retrieval ΓÇö Component Tests
+============================================================
+
+=== Testing IntentClassifier ===
+
+  Γ£à query='what is the abstract'
+       intent=document_section (expected: document_section) Γ£ô
+       section=abstract (expected: abstract) Γ£ô
+       confidence=0.9, explanation='Section query detected: abstract'
+
+  Γ£à query='give conclusion'
+       intent=document_section (expected: document_section) Γ£ô
+       section=conclusion (expected: conclusion) Γ£ô
+       confidence=0.75, explanation='Section query detected: conclusion'
+
+  Γ£à query='abstract'
+       intent=document_section (expected: document_section) Γ£ô
+       section=abstract (expected: abstract) Γ£ô
+       confidence=0.75, explanation='Section query detected: abstract'
+
+  Γ£à query='method?'
+       intent=document_section (expected: document_section) Γ£ô
+       section=methodology (expected: methodology) Γ£ô
+       confidence=0.75, explanation='Section query detected: methodology'
+
+  Γ£à query='results'
+       intent=document_section (expected: document_section) Γ£ô
+       section=results (expected: results) Γ£ô
+       confidence=0.75, explanation='Section query detected: results'
+
+  Γ£à query='explain agentic rag'
+       intent=conceptual (expected: conceptual) Γ£ô
+       section=None (expected: None) Γ£ô
+       confidence=0.85, explanation='Conceptual/general knowledge query'
+
+  Γ£à query='what is deep learning'
+       intent=conceptual (expected: conceptual) Γ£ô
+       section=None (expected: None) Γ£ô
+       confidence=0.85, explanation='Conceptual/general knowledge query'
+
+  Γ£à query='what does my project say about transformers'
+       intent=document_specific (expected: document_specific) Γ£ô
+       section=None (expected: None) Γ£ô
+       confidence=0.9, explanation='Document-specific query detected'
+
+  Γ£à query='in my document, what is the conclusion'
+       intent=document_section (expected: document_section) Γ£ô
+       section=conclusion (expected: conclusion) Γ£ô
+       confidence=0.9, explanation='Section query detected: conclusion'
+
+  Γ£à query='compare my abstract with agentic rag'
+       intent=document_section (expected: document_section) Γ£ô
+       section=abstract (expected: abstract) Γ£ô
+       confidence=0.9, explanation='Section query detected: abstract'
+
+  Γ£à query='main idea?'
+       intent=ambiguous (expected: ambiguous) Γ£ô
+       section=None (expected: None) Γ£ô
+       confidence=0.5, explanation='Short ambiguous query'
+
+  Γ£à query=''
+       intent=ambiguous (expected: ambiguous) Γ£ô
+       section=None (expected: None) Γ£ô
+       confidence=0.5, explanation='Empty query'
+
+IntentClassifier: 12/12 tests passed
+
+=== Testing QueryRewriter ===
+
+  Γ£à 'abstract' ΓåÆ 'abstract summary overview main contribution key findings from uploaded document'
+       intent=document_section, expanded=True
+
+  Γ£à 'what is the abstract' ΓåÆ 'abstract summary overview main contribution key findings from uploaded document'
+       intent=document_section, expanded=True
+
+  Γ£à 'method?' ΓåÆ 'methodology methods approach technique implementation design experimental setup from uploaded document'
+       intent=document_section, expanded=True
+
+  Γ£à 'main idea?' ΓåÆ 'main idea key points summary overview central theme from uploaded document'
+       intent=ambiguous, expanded=True
+
+  Γ£à 'explain agentic rag' ΓåÆ 'explain agentic rag'
+       intent=conceptual, expanded=False
+
+  ΓÜá∩╕Å 'what does my project say about transformers' ΓåÆ 'transformers from uploaded document content'
+       intent=document_specific, expanded=False
+
+  Γ£à 'give conclusion' ΓåÆ 'conclusion summary concluding remarks future work key takeaways from uploaded document'
+       intent=document_section, expanded=True
+
+
+=== Testing SectionDetector ===
+
+  Γ£à 'Abstract
+This paper presents a novel approach to ....' ΓåÆ abstract (expected: abstract)
+  Γ£à '1. Introduction
+In recent years, the field of ......' ΓåÆ introduction (expected: introduction)
+  Γ£à 'Methodology
+We propose a three-stage pipeline ......' ΓåÆ methodology (expected: methodology)
+  Γ£à 'Results
+Table 1 shows the performance metrics ......' ΓåÆ results (expected: results)
+  Γ£à 'Discussion
+Our findings suggest that the approach ...' ΓåÆ discussion (expected: discussion)
+  Γ£à 'Conclusion
+In this paper, we have presented ......' ΓåÆ conclusion (expected: conclusion)
+  Γ£à 'References
+[1] Smith et al., 2023 ......' ΓåÆ references (expected: references)
+  Γ£à 'The transformer architecture uses self-attention m...' ΓåÆ body (expected: body)
+
+  Batch detection: ['abstract', 'introduction', 'methodology', 'results', 'discussion', 'conclusion', 'references', 'conclusion']
+
+SectionDetector: 8/8 tests passed
+
+=== Testing RetrievalValidator ===
+
+  Γ£à Empty chunks ΓåÆ is_valid=False, should_retry=True
+  Γ£à Low score (0.1) ΓåÆ is_valid=False
+  Γ£à Good match ΓåÆ is_valid=True
+  Γ£à Wrong section ΓåÆ is_valid=False, should_retry=True
+  Γ£à Conceptual query ΓåÆ is_valid=True
+
+RetrievalValidator: 5/5 tests passed
+
+============================================================
+  Summary
+============================================================
+  Γ£à PASS ΓÇö IntentClassifier
+  Γ£à PASS ΓÇö QueryRewriter
+  Γ£à PASS ΓÇö SectionDetector
+  Γ£à PASS ΓÇö RetrievalValidator
+
+Γ£à All tests passed!

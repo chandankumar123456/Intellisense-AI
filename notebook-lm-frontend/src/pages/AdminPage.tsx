@@ -13,8 +13,9 @@ import adminService, {
     PromotionCandidate,
     EvictionCandidate,
 } from '../services/adminService';
+import adminStorageService, { StorageStatus, StorageConfig, StorageTestResult } from '../services/adminStorageService';
 
-type Tab = 'upload' | 'documents' | 'health' | 'audit' | 'maintenance';
+type Tab = 'upload' | 'documents' | 'health' | 'audit' | 'maintenance' | 'storage';
 
 const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'upload', label: 'Upload', icon: Upload },
@@ -22,6 +23,7 @@ const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'health', label: 'System Health', icon: Activity },
     { id: 'audit', label: 'Audit Logs', icon: FileText },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
+    { id: 'storage', label: 'Storage', icon: HardDrive },
 ];
 
 // ═══════════════════════════════════════════════════
@@ -100,6 +102,7 @@ const AdminPage: React.FC = () => {
                     {activeTab === 'health' && <HealthTab />}
                     {activeTab === 'audit' && <AuditTab />}
                     {activeTab === 'maintenance' && <MaintenanceTab />}
+                    {activeTab === 'storage' && <StorageTab />}
                 </div>
             </div>
         </div>
@@ -812,6 +815,269 @@ const MaintenanceTab: React.FC = () => {
                     <RefreshCw className="w-3.5 h-3.5 z-content relative" />
                     <span className="z-content relative">Refresh</span>
                 </button>
+            </div>
+        </div>
+    );
+};
+
+// ═══════════════════════════════════════════════════
+// TAB 6: STORAGE
+// ═══════════════════════════════════════════════════
+
+const StorageTab: React.FC = () => {
+    const [status, setStatus] = useState<StorageStatus | null>(null);
+    const [config, setConfig] = useState<StorageConfig | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [testing, setTesting] = useState(false);
+    const [testResults, setTestResults] = useState<StorageTestResult[]>([]);
+    const [switching, setSwitching] = useState(false);
+
+    // Form state for config updates
+    const [targetMode, setTargetMode] = useState<'aws' | 'local'>('aws');
+    const [awsKey, setAwsKey] = useState('');
+    const [awsSecret, setAwsSecret] = useState('');
+    const [pineconeKey, setPineconeKey] = useState('');
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [s, c] = await Promise.all([
+                adminStorageService.getStatus(),
+                adminStorageService.getConfig()
+            ]);
+            setStatus(s);
+            setConfig(c);
+            setTargetMode(c.mode); // Initialize form with current mode
+        } catch {
+            toast.error('Failed to load storage info');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleRunTest = async () => {
+        setTesting(true);
+        setTestResults([]);
+        try {
+            const results = await adminStorageService.testStorage();
+            setTestResults(results);
+            const success = results.every(r => r.status === 'ok');
+            if (success) toast.success('All storage tests passed!');
+            else toast.error('Some storage tests failed.');
+        } catch {
+            toast.error('Failed to run storage tests');
+        } finally {
+            setTesting(false);
+        }
+    };
+
+    const handleSwitchMode = async () => {
+        if (!config) return;
+        if (targetMode === config.mode && !awsKey && !awsSecret && !pineconeKey) {
+            toast('No changes detected', { icon: 'ℹ️' });
+            return;
+        }
+
+        if (!window.confirm(`Are you sure you want to update storage configuration to use ${targetMode.toUpperCase()}? This will reinitialize storage adapters.`)) return;
+
+        setSwitching(true);
+        try {
+            const payload: any = { mode: targetMode };
+            if (awsKey) payload.aws_access_key_id = awsKey;
+            if (awsSecret) payload.aws_secret_access_key = awsSecret;
+            if (pineconeKey) payload.pinecone_api_key = pineconeKey;
+
+            await adminStorageService.updateConfig(payload);
+            toast.success(`Storage mode updated to ${targetMode.toUpperCase()}`);
+
+            // Refresh status
+            await fetchData();
+            // Clear secrets from form
+            setAwsKey('');
+            setAwsSecret('');
+            setPineconeKey('');
+        } catch (err: any) {
+            toast.error('Failed to update storage config');
+            console.error(err);
+        } finally {
+            setSwitching(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center py-16">
+                <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--accent-primary)' }} />
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            {/* Status Card */}
+            <div className="liquid-glass rounded-glass" style={{ padding: '20px' }}>
+                <div className="z-content relative">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                            <Activity className="w-4 h-4" /> Current Status
+                        </h3>
+                        <span
+                            className="px-3 py-1 rounded-pill text-xs font-bold uppercase tracking-wider"
+                            style={{
+                                background: status?.mode === 'aws' ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)',
+                                color: status?.mode === 'aws' ? '#22C55E' : '#3B82F6',
+                                border: `1px solid ${status?.mode === 'aws' ? 'rgba(34,197,94,0.2)' : 'rgba(59,130,246,0.2)'}`
+                            }}
+                        >
+                            {status?.mode} MODE
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="p-3 rounded-glass-sm" style={{ background: 'var(--glass-surface)' }}>
+                            <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">File Storage</p>
+                            <p className="text-sm font-mono" style={{ color: 'var(--text-primary)' }}>{status?.files_adapter}</p>
+                        </div>
+                        <div className="p-3 rounded-glass-sm" style={{ background: 'var(--glass-surface)' }}>
+                            <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Vector DB</p>
+                            <p className="text-sm font-mono" style={{ color: 'var(--text-primary)' }}>{status?.vectors_adapter}</p>
+                        </div>
+                        <div className="p-3 rounded-glass-sm" style={{ background: 'var(--glass-surface)' }}>
+                            <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Metadata Store</p>
+                            <p className="text-sm font-mono" style={{ color: 'var(--text-primary)' }}>{status?.metadata_adapter}</p>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 flex justify-end">
+                        <button
+                            onClick={handleRunTest}
+                            disabled={testing}
+                            className="btn-liquid flex items-center gap-2"
+                            style={{ fontSize: '12px', minHeight: '34px', padding: '0 16px' }}
+                        >
+                            {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                            Run Verification Test
+                        </button>
+                    </div>
+
+                    {testResults && testResults.length > 0 && (
+                        <div className="mt-4 space-y-2 animate-fade-in">
+                            {testResults.map((res, i) => (
+                                <div key={i} className="flex items-center gap-3 p-2 rounded-glass-sm" style={{ background: res.status === 'ok' ? 'rgba(34,197,94,0.05)' : 'rgba(239,68,68,0.05)' }}>
+                                    {res.status === 'ok' ? (
+                                        <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                    ) : (
+                                        <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                    )}
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{res.storage_type}</p>
+                                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{res.message}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Configuration Form */}
+            <div className="liquid-glass rounded-glass" style={{ padding: '20px' }}>
+                <div className="z-content relative">
+                    <h3 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                        <Wrench className="w-4 h-4" /> Configuration
+                    </h3>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Storage Mode</label>
+                            <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="mode"
+                                        value="aws"
+                                        checked={targetMode === 'aws'}
+                                        onChange={() => setTargetMode('aws')}
+                                        className="accent-blue-500"
+                                    />
+                                    <span className="text-sm" style={{ color: 'var(--text-primary)' }}>AWS S3 + Pinecone</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="mode"
+                                        value="local"
+                                        checked={targetMode === 'local'}
+                                        onChange={() => setTargetMode('local')}
+                                        className="accent-blue-500"
+                                    />
+                                    <span className="text-sm" style={{ color: 'var(--text-primary)' }}>Local Files System + ChromaDB</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        {targetMode === 'aws' && (
+                            <div className="space-y-3 p-4 rounded-glass-sm" style={{ background: 'var(--glass-surface)', border: '1px solid var(--border-subtle)' }}>
+                                <p className="text-xs font-medium text-blue-400 mb-2">AWS Credentials (Optional - leave blank if unchanged)</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>AWS Access Key ID</label>
+                                        <input
+                                            type="password"
+                                            className="input-field w-full"
+                                            placeholder="Enter new Access Key ID"
+                                            value={awsKey}
+                                            onChange={(e) => setAwsKey(e.target.value)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>AWS Secret Access Key</label>
+                                        <input
+                                            type="password"
+                                            className="input-field w-full"
+                                            placeholder="Enter new Secret Access Key"
+                                            value={awsSecret}
+                                            onChange={(e) => setAwsSecret(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Pinecone API Key</label>
+                                        <input
+                                            type="password"
+                                            className="input-field w-full"
+                                            placeholder="Enter new Pinecone API Key"
+                                            value={pineconeKey}
+                                            onChange={(e) => setPineconeKey(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end pt-2">
+                            <button
+                                onClick={handleSwitchMode}
+                                disabled={switching}
+                                className="btn-primary-liquid"
+                                style={{ minHeight: '38px', padding: '0 24px', fontSize: '13px' }}
+                            >
+                                {switching ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin z-content relative" />
+                                        <span className="z-content relative">Updating Config...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Zap className="w-4 h-4 z-content relative" />
+                                        <span className="z-content relative">Save Changes & Reinitialize</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );

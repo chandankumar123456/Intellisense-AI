@@ -17,7 +17,7 @@ CHUNK_MIN_LENGTH_CHARS = 80      # skip garbage tiny sections
 DEDUP_COSINE_THRESHOLD = 0.92
 
 # ── Importance scoring ──
-IMPORTANCE_EMBED_THRESHOLD = 0.7  # embed only chunks ≥ this
+IMPORTANCE_EMBED_THRESHOLD = 0.05  # significantly lowered to ensure user uploads are embedded
 IMPORTANCE_WEIGHTS = {
     "syllabus_match": 0.30,
     "header_prominence": 0.20,
@@ -31,6 +31,12 @@ VECTOR_TOP_K_DEFAULT = 30
 METADATA_SCAN_LIMIT = 20
 RERANK_TOP_K = 5
 MAX_FETCHED_SECTIONS_PER_QUERY = 20
+
+# ── Intent-Aware Retrieval ──
+SECTION_BOOST_WEIGHT = 0.15
+DOCUMENT_BOOST_WEIGHT = 0.10
+RETRIEVAL_QUALITY_THRESHOLD = 0.3
+MAX_RETRIEVAL_RETRIES = 1
 
 # ── Confidence calibration weights ──
 CONFIDENCE_WEIGHTS = {
@@ -70,3 +76,18 @@ DOCUMENT_STORAGE_PATH = "data/documents"
 
 # ── Audit ──
 AUDIT_LOG_PATH = "data/audit"
+
+# ── Storage Backend ──
+# "s3" (default) or "local" for backward-compatible dev mode
+import os as _os
+STORAGE_BACKEND = _os.getenv("STORAGE_BACKEND", "s3").lower()
+
+# ── AWS S3 ──
+AWS_REGION = _os.getenv("AWS_REGION", "ap-south-1")
+S3_BUCKET_NAME = _os.getenv("S3_BUCKET_NAME", "")
+S3_DOCUMENT_PREFIX = "documents"  # top-level key prefix in bucket
+
+# ── Storage Mode ──
+STORAGE_MODE = _os.getenv("STORAGE_MODE", "aws").lower()
+CHROMA_DB_PATH = _os.path.join("local_storage", "chroma_db")
+LOCAL_STORAGE_PATH = "local_storage"

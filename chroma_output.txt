@@ -1,0 +1,21 @@
+Collection 'evilearn_chunks' has 18 embeddings.
+ID: test_doc_repro_1_0_0
+Metadata keys: ['importance_score', 'page', 'offset_end', 'subtopic', 'topic', 'offset_start', 'user_id', 'subject', 'doc_id', 'category', 'source_url', 'source_type', 'chunk_text']
+Text snippet: This is a test document. It contains some information about usage. We need to ensure that this text ...
+----------------------------------------
+ID: 1b31df64-38f8-4132-80d6-7f635c9ad10d_0_0
+Metadata keys: ['chunk_text', 'subject', 'offset_end', 'topic', 'importance_score', 'subtopic', 'source_type', 'doc_id', 'offset_start', 'source_url', 'user_id', 'category', 'page']
+Text snippet: Abstract With the rapid adoption of Large Language Models (LLMs) in education, students increasingly...
+----------------------------------------
+ID: 97ac167a-4b70-4bad-b7cd-fdff883e84f4_0_0
+Metadata keys: ['page', 'subtopic', 'source_type', 'offset_end', 'source_url', 'chunk_text', 'doc_id', 'offset_start', 'topic', 'importance_score', 'category', 'user_id', 'subject']
+Text snippet: 9th International Artificial Intelligence and Data Processing Symposium (IDAP'25), Sept 6 -7, 2025, ...
+----------------------------------------
+ID: 97ac167a-4b70-4bad-b7cd-fdff883e84f4_0_338
+Metadata keys: ['offset_end', 'page', 'source_type', 'subject', 'category', 'offset_start', 'source_url', 'topic', 'importance_score', 'chunk_text', 'doc_id', 'user_id', 'subtopic']
+Text snippet: tool is used in the process to remove duplicates and screen the articles. Initially reviewed article...
+----------------------------------------
+ID: 97ac167a-4b70-4bad-b7cd-fdff883e84f4_0_676
+Metadata keys: ['offset_start', 'user_id', 'topic', 'page', 'importance_score', 'doc_id', 'source_url', 'source_type', 'category', 'offset_end', 'subject', 'chunk_text', 'subtopic']
+Text snippet: autonomous agents that operate in a goal -oriented manner to dynamically handle retrieval, reasoning...
+----------------------------------------

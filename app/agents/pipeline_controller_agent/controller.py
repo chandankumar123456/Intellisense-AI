@@ -33,7 +33,9 @@ from .controller_config import (
     DEFAULT_MAX_OUTPUT_TOKENS,
     FALLBACK_INSUFFICIENT_CONTEXT,
     FALLBACK_QUERY_UNDERSTANDING_FAILURE,
-    FALLBACK_SYNTHESIZER_FAILURE
+    FALLBACK_SYNTHESIZER_FAILURE,
+    FALLBACK_NO_KNOWLEDGE,
+    NO_KNOWLEDGE_SCORE_THRESHOLD,
 )
 
 import time
@@ -41,8 +43,9 @@ import datetime
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 from app.core.logging import log_info, log_error
-from typing import List, Dict, Any
-from dotenv import load_dotenv
+from app.rag.intent_classifier import classify_intent, IntentResult, QueryIntent
+from app.rag.query_rewriter import rewrite_query
+from app.rag.retrieval_validator import validate_retrieval
 
 
 class PipelineControllerAgent:
@@ -160,7 +163,46 @@ class PipelineControllerAgent:
             }
 
         # ======================
-        # 2. RETRIEVAL
+        # 1.5 INTENT CLASSIFICATION (rule-based, no LLM)
+        # ======================
+        intent_result = classify_intent(query)
+        log_info(
+            f"Intent classified: {intent_result.intent.value}, "
+            f"section={intent_result.target_section}, "
+            f"confidence={intent_result.confidence}"
+        )
+
+        trace["intent_classification"] = {
+            "intent": intent_result.intent.value,
+            "target_section": intent_result.target_section,
+            "has_document_reference": intent_result.has_document_reference,
+            "confidence": intent_result.confidence,
+            "explanation": intent_result.explanation,
+        }
+
+        # ======================
+        # 1.6 QUERY REWRITING (deterministic, no LLM)
+        # ======================
+        rewritten_for_retrieval = rewrite_query(
+            raw_query=query,
+            intent_result=intent_result,
+        )
+        # Use intent-aware rewrite if the LLM rewrite is too short or generic
+        llm_rewrite = self.query_understanding_output.rewritten_query
+        if len(rewritten_for_retrieval.split()) > len(llm_rewrite.split()):
+            effective_query = rewritten_for_retrieval
+        else:
+            effective_query = llm_rewrite
+
+        log_info(f"Effective retrieval query: '{effective_query}'")
+        trace["query_rewriting"] = {
+            "llm_rewrite": llm_rewrite,
+            "intent_rewrite": rewritten_for_retrieval,
+            "effective_query": effective_query,
+        }
+
+        # ======================
+        # 2. RETRIEVAL (section-aware)
         # ======================
         try:
             # 🔥 CRITICAL FIX: convert QueryUnderstanding RetrievalParams → RetrievalAgent RetrievalParams
@@ -171,15 +213,18 @@ class PipelineControllerAgent:
             self.retrieval_agent_input = RetrievalInput(
                 user_id=user_id,
                 session_id=session_id,
-                rewritten_query=self.query_understanding_output.rewritten_query,
+                rewritten_query=effective_query,  # Use intent-aware query
                 retrievers_to_use=self.query_understanding_output.retrievers_to_use,
-                retrieval_params=converted_params,     # ← FIX
+                retrieval_params=converted_params,
                 conversation_history=conversation_history,
                 preferences=preferences
             )
 
             self.retrieval_agent_output: RetrievalOutput = \
-                await self.retriever_orchestrator.run(self.retrieval_agent_input)
+                await self.retriever_orchestrator.run(
+                    self.retrieval_agent_input,
+                    intent_result=intent_result  # Pass intent for section-aware retrieval
+                )
 
         except Exception as e:
             warnings.append(f"Retrieval failed: {e}")
@@ -189,7 +234,83 @@ class PipelineControllerAgent:
                 trace_id=f"fallback-{int(time.time() * 1000)}",
             )
 
+        # ======================
+        # 2.5 POST-RETRIEVAL VALIDATION
+        # ======================
+        validation = validate_retrieval(
+            chunks=self.retrieval_agent_output.chunks,
+            intent_result=intent_result,
+        )
+
+        # Only retry if we have SOME chunks but they're weak (partial results).
+        # If zero chunks were found, a retry won't help — skip to save latency.
+        if (not validation.is_valid
+                and validation.should_retry
+                and len(self.retrieval_agent_output.chunks) > 0):
+            log_info(f"Retrieval validation failed: {validation.reason}. Retrying with expanded query...")
+            try:
+                retry_query = rewritten_for_retrieval if effective_query != rewritten_for_retrieval else f"{effective_query} detailed content information"
+                retry_input = RetrievalInput(
+                    user_id=user_id,
+                    session_id=session_id,
+                    rewritten_query=retry_query,
+                    retrievers_to_use=self.query_understanding_output.retrievers_to_use,
+                    retrieval_params=converted_params,
+                    conversation_history=conversation_history,
+                    preferences=preferences
+                )
+                retry_output = await self.retriever_orchestrator.run(
+                    retry_input, intent_result=intent_result
+                )
+                retry_validation = validate_retrieval(
+                    chunks=retry_output.chunks,
+                    intent_result=intent_result,
+                )
+                if retry_validation.top_score > validation.top_score:
+                    self.retrieval_agent_output = retry_output
+                    validation = retry_validation
+                    log_info("Retry improved results, using retried output.")
+                else:
+                    log_info("Retry did not improve results, keeping original.")
+            except Exception as e:
+                warnings.append(f"Retrieval retry failed: {e}")
+
+        trace["retrieval_validation"] = {
+            "is_valid": validation.is_valid,
+            "reason": validation.reason,
+            "top_score": validation.top_score,
+            "section_match_count": validation.section_match_count,
+            "document_match_count": validation.document_match_count,
+        }
+
         trace["retrieval_trace"] = self.retrieval_agent_output.retrieval_trace
+
+        # ======================
+        # 2.6 EARLY NO-KNOWLEDGE EXIT
+        # ======================
+        # If retrieval found nothing relevant, skip synthesis entirely
+        # to avoid slow LLM calls that will just produce an error.
+        has_no_chunks = len(self.retrieval_agent_output.chunks) == 0
+        has_low_relevance = validation.top_score < NO_KNOWLEDGE_SCORE_THRESHOLD
+
+        if has_no_chunks or has_low_relevance:
+            latency_ms = int((time.time() - start_time) * 1000)
+            log_info(
+                f"No-knowledge fast path: chunks={len(self.retrieval_agent_output.chunks)}, "
+                f"top_score={validation.top_score:.3f}, latency={latency_ms}ms"
+            )
+            return {
+                "answer": FALLBACK_NO_KNOWLEDGE,
+                "confidence": 0.0,
+                "warnings": warnings + ["no_relevant_knowledge"],
+                "used_chunk_ids": [],
+                "retrieval_trace": trace.get("retrieval_trace", {}),
+                "query_understanding": trace.get("query_understanding", {}),
+                "trace_id": self.retrieval_agent_output.trace_id,
+                "latency_ms": latency_ms,
+                "raw_model_output": None,
+                "metrics": {},
+            }
 
         # ======================
         # 3. SYNTHESIS
