@@ -1,95 +1,137 @@
+# 🧠 IntelliSense AI – Agentic RAG Platform
 
-# 🧠 IntelliSense AI – Full Stack Setup Guide
-
-IntelliSense AI is an agentic RAG-powered intelligence system that enables advanced document understanding, session management, and real-time chat interactions.
-
----
-
-## 🏗️ Project Architecture
-
-- **Backend:** FastAPI (Python) powered by `uv` & `Agno`
-- **Frontend:** React (TypeScript) with Tailwind CSS
-- **Database/Cache:** Redis
-- **Vector DB:** Pinecone
-- **LLM/Embeddings:** Groq, Google Generative AI (Gemini), OpenAI
+**IntelliSense AI** is a next-generation **Agentic RAG (Retrieval-Augmented Generation)** platform designed to provide deep, context-aware intelligence from your documents. Unlike simple RAG systems, IntelliSense AI uses a sophisticated multi-agent architecture (Orchestrator, Writer, Reviewer) to understand user intent, manage sessions, and deliver precise, high-quality answers.
 
 ---
 
-## 🚀 Quick Start
+## 🏗️ Architecture Overview
 
-### 1. **Prerequisites**
+-   **Backend:** FastAPI (Python) with `Agno` (Agentic Framework) & to `uv` (Dependency Management).
+-   **Frontend:** React (TypeScript) with Tailwind CSS & Lucide Icons.
+-   **Vector Logic:** Hybrid Search (Semantic + Keyword) with dynamic reranking.
+-   **Storage Modes:**
+    -   **Local Mode (Default):** Uses local filesystem & ChromaDB (No Cloud needed!).
+    -   **AWS Mode:** Uses S3 for documents & Pinecone for vectors (Production scale).
+-   **Database:** Redis (for high-speed session caching & chat history).
+
+---
+
+## 🚀 Quick Start (Local Mode)
+
+This is the easiest way to run IntelliSense AI on your local machine without needing AWS keys or Pinecone.
+
+### 1. Prerequisites
+
 Ensure you have the following installed:
-- [Python 3.10+](https://www.python.org/)
-- [Node.js & npm](https://nodejs.org/)
-- [Docker](https://www.docker.com/)
-- [uv](https://github.com/astral-sh/uv) (Highly recommended for Python dependency management)
 
-### 2. **Clone the Repository**
+*   [**Python 3.10+**](https://www.python.org/)
+*   [**Node.js (v18+) & npm**](https://nodejs.org/)
+*   [**Docker Desktop**](https://www.docker.com/products/docker-desktop/) (Required for Redis)
+*   **[uv](https://github.com/astral-sh/uv)** (Highly recommended for Python speed):
+    ```bash
+    # On Windows (PowerShell)
+    powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+    # On macOS/Linux
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+
+### 2. Clone the Repository
+
 ```bash
 git clone https://github.com/chandankumar123456/intellisense-ai.git
 cd intellisense-ai
 ```
 
----
+### 3. Start Infrastructure (Redis)
 
-## 🛠️ Infrastructure Setup
-
-### **Redis (Docker)**
-The project requires a Redis instance for session management and caching. Run the following command to start a Redis container:
+Start a Redis container for session management:
 
 ```bash
-docker run -d --name redis-client -p 6379:6379 redis
+docker run -d --name redis-server -p 6379:6379 redis
 ```
 
 ---
 
-## 🐍 Backend Configuration
+### 4. Backend Setup (FastAPI)
 
-### **1. Install Dependencies**
-We use `uv` for lightning-fast dependency management.
-```bash
-uv sync
-```
+1.  **Install Python Dependencies:**
+    ```bash
+    uv sync
+    ```
 
-### **2. Environment Variables**
-Create a `.env` file in the root directory and add the following:
-```env
-# API Keys
-GROQ_API_KEY="your_groq_api_key"
-GOOGLE_API_KEY="your_google_api_key"
-PINECONE_API_KEY="your_pinecone_api_key"
+2.  **Configure Environment Variables:**
+    Create a `.env` file in the root directory:
+    ```env
+    # --- LLM API Keys (Required) ---
+    GROQ_API_KEY="your_groq_api_key"
+    GOOGLE_API_KEY="your_google_api_key"
+    # OPENAI_API_KEY="your_openai_key" # Optional, if using OpenAI models
+    
+    # --- Storage Configuration (Local Mode) ---
+    STORAGE_MODE="local"
+    
+    # --- Redis Configuration ---
+    REDIS_HOST="localhost"
+    REDIS_PORT=6379
+    
+    # --- Optional Tracing ---
+    # LANGSMITH_TRACING="true"
+    # LANGSMITH_API_KEY="your_key"
+    ```
 
-# Redis Configuration
-REDIS_HOST="localhost"
-REDIS_PORT=6379
-
-# LangSmith (Optional but recommended)
-LANGSMITH_TRACING="true"
-LANGSMITH_API_KEY="your_langsmith_api_key"
-```
-
-### **3. Run the Backend Server**
-```bash
-uv run uvicorn app.main:app --reload
-```
-The backend will be available at: `http://localhost:8000`
+3.  **Run the Backend Server:**
+    ```bash
+    uv run uvicorn app.main:app --reload
+    ```
+    ✅ **Backend is running at:** `http://localhost:8000`  
+    📄 **API Docs:** `http://localhost:8000/docs`
 
 ---
 
-## ⚛️ Frontend Configuration
+### 5. Frontend Setup (React)
 
-### **1. Install Dependencies**
-Navigate to the frontend directory:
-```bash
-cd notebook-lm-frontend
-npm install
-```
+Open a **new terminal** window:
 
-### **2. Run the Development Server**
-```bash
-npm start
-```
-The frontend will be available at: `http://localhost:3000`
+1.  **Navigate to Frontend:**
+    ```bash
+    cd notebook-lm-frontend
+    ```
+
+2.  **Install Node Modules:**
+    ```bash
+    npm install
+    ```
+    *(Note: If you see legacy peer dependency errors, run `npm install --legacy-peer-deps`)*
+
+3.  **Start the React App:**
+    ```bash
+    npm start
+    ```
+    ✅ **Frontend is running at:** `http://localhost:3000`
+
+---
+
+## ☁️ Production Setup (AWS + Pinecone)
+
+To run in production mode with cloud storage and scalable vector search:
+
+1.  **Update `.env`:**
+    ```env
+    STORAGE_MODE="aws"
+    
+    # AWS Credentials
+    AWS_ACCESS_KEY_ID="your_aws_key"
+    AWS_SECRET_ACCESS_KEY="your_aws_secret"
+    AWS_REGION="us-east-1"
+    S3_BUCKET_NAME="your-s3-bucket-name"
+    
+    # Pinecone Credentials
+    PINECONE_API_KEY="your_pinecone_key"
+    PINECONE_INDEX_NAME="intellisense-ai-dense-index-v2"
+    ```
+
+2.  **Restart Backend:**
+    The application will automatically switch from local filesystem/ChromaDB to S3/Pinecone.
 
 ---
 
@@ -97,32 +139,39 @@ The frontend will be available at: `http://localhost:3000`
 
 ```text
 IntelliSense-AI/
-├── app/                    # Backend Source Code
-│   ├── api/                # API Routes (Chat, Auth, Ingestion)
-│   ├── core/               # Shared logic (Redis Client, Logging)
-│   └── main.py             # FastAPI Entry Point
-├── notebook-lm-frontend/   # Frontend Source Code
-│   ├── src/                # React Components & Logic
-│   └── package.json        # Frontend Dependencies
-├── requirements.txt        # Python Dependencies
-├── uv.lock                 # UV Lockfile
-└── README.md               # You are here!
+├── app/                        # 🧠 Backend Logic
+│   ├── agents/                 # Agent definitions (Orchestrator, Writer, etc.)
+│   ├── api/                    # FastAPI Routes (Chat, Auth, Ingestion)
+│   ├── core/                   # Config, logging, and exceptions
+│   ├── storage/                # Storage adapters (Local/S3, Chroma/Pinecone)
+│   └── main.py                 # Application Entry Point
+├── data/                       # 💽 Local Data Storage (Created on runtime)
+│   ├── documents/              # Uploaded files (in Local Mode)
+│   ├── metadata_index.db       # SQLite metadata store
+│   └── chroma_db/              # ChromaDB vector store
+├── notebook-lm-frontend/       # ⚛️ React Frontend
+│   ├── src/
+│   │   ├── components/         # Reusable UI components
+│   │   ├── pages/              # Application pages (Chat, Admin)
+│   │   └── services/           # API client services
+├── scripts/                    # 🛠️ Utility / Migration Scripts
+├── requirements.txt            # Python Dependencies
+└── README.md                   # Project Documentation
 ```
 
 ---
 
-## 👥 Contributing
+## 🛠️ Troubleshooting
 
-1. **Check Dependencies:** Always use `uv sync` after pulling changes.
-2. **Coding Standards:** Follow PEP8 for Python and Prettier for JS/TS.
-3. **Environment:** Keep your `.env` file updated but never commit it to Git.
-
----
-
-## ❓ Troubleshooting
-
-- **Redis Connection Error:** Ensure the Docker container is running (`docker ps`).
-- **ModuleNotFoundError:** Run `uv sync` again to ensure the virtual environment is up to date.
-- **CORS Issues:** The backend is configured to allow all origins by default in development.
+| Issue | Solution |
+| :--- | :--- |
+| **Redis Connection Error** | Ensure Docker is running and the container is active: `docker ps`. If stopped, run `docker start redis-server`. |
+| **`ModuleNotFoundError`** | Run `uv sync` to install missing Python packages. |
+| **Frontend Connection Refused** | Ensure the backend is running on port `8000`. Check browser console (`F12`) for CORS errors (though CORS is enabled by default). |
+| **Ingestion Fails** | In Local Mode, ensure the `data/` directory is writable. In AWS Mode, check your S3 bucket permissions. |
 
 ---
+
+## 📜 License
+
+This project is licensed under the MIT License.
