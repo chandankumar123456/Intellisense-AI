@@ -137,8 +137,7 @@ const HistoryPage: React.FC = () => {
                     }}
                     onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--glass-elevated)'; }}
                     onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--glass-surface)'; }}
-                    role="button"
-                    aria-selected={isSelected}
+                    role="listitem"
                   >
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <h3 className="font-medium text-sm text-text_primary line-clamp-2 leading-snug">{conversation.title}</h3>
