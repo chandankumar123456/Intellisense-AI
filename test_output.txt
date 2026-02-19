@@ -1,0 +1,41 @@
+============================================================
+Operational Stability Hardening -- Verification
+============================================================
+
+1. Testing Reindex Max Attempts Guard...
+  [PASS] Reindex blocked after max attempts
+  [PASS] _run_pipeline NOT called
+
+2. Testing Reindex Cooldown Guard...
+  [PASS] Reindex skipped during cooldown
+  [PASS] _run_pipeline NOT called during cooldown
+
+3. Testing Cooldown Elapsed Allows Reindex...
+  [PASS] Cooldown elapsed after 7 hours (threshold=6)
+  [PASS] Cooldown NOT elapsed after 1 hour
+
+4. Testing Successful Reindex Resets Attempts...
+  [PASS] Reindex attempt recorded
+  [PASS] _run_pipeline called with recovered text
+  [PASS] Attempts reset on success
+
+5. Testing Repair Semaphore Throttling...
+  [PASS] Semaphore initialized with value 2
+  [PASS] Max concurrent repairs was 2 (limit=2)
+
+6. Testing Drift Severity Gating...
+  [PASS] Auto-reindex NOT triggered for non-severe score (5.0)
+  [PASS] Auto-reindex triggered for severe score (1.0)
+
+7. Testing Monitor Skips Exhausted Uploads...
+  [PASS] Upload marked as reindex_exhausted
+  [PASS] Reindex NOT called for exhausted upload
+
+8. Testing Embedding Model Version Tracking...
+  [PASS] update_embedding_model callable
+  [PASS] get_uploads_needing_model_migration callable
+
+============================================================
+Results: 17 passed, 0 failed
+============================================================
+ALL Operational Stability Verifications Passed!

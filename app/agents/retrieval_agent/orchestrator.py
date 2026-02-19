@@ -19,6 +19,7 @@ from app.core.config import (
     COVERAGE_GAP_FILL_ENABLED,
     RETRIEVAL_MEMORY_ENABLED,
     SEMANTIC_COVERAGE_MIN,
+    STUDENT_KNOWLEDGE_BOOST,
 )
 from app.storage import storage_manager
 
@@ -42,10 +43,12 @@ class RetrievalOrchestratorAgent:
         
     async def run(self, input: RetrievalInput, intent_result: Optional[IntentResult] = None,
                   subject_scope: Optional[SubjectScope] = None,
-                  query_type: Optional[str] = None) -> RetrievalOutput:
+                  query_type: Optional[str] = None,
+                  student_id: Optional[str] = None) -> RetrievalOutput:
         
         self.vector_chunks = []
         self.keyword_chunks = []
+        student_chunks = []
         section_chunks = []
         
         self.trace_id = self.create_trace()
@@ -112,8 +115,29 @@ class RetrievalOrchestratorAgent:
                 "target_section": intent_result.target_section,
                 "status": "success" if section_chunks else "no_results",
             })
-            
-        merged = self.merge_chunks([self.keyword_chunks, self.vector_chunks, section_chunks])
+
+        # ══════════════════════════════════════════
+        # 3.1. Student Knowledge Search (student-scoped)
+        # ══════════════════════════════════════════
+        if student_id:
+            student_chunks = await self.vector_retriever.search_student_knowledge(
+                query=input.rewritten_query,
+                student_id=student_id,
+                top_k=input.retrieval_params.top_k_vector,
+            )
+            # Apply priority boost to student knowledge chunks
+            for chunk in student_chunks:
+                chunk.raw_score = min(chunk.raw_score + STUDENT_KNOWLEDGE_BOOST, 1.0)
+                if chunk.metadata:
+                    chunk.metadata["is_student_knowledge"] = True
+            trace.log_stage("student_knowledge_search", {
+                "count": len(student_chunks),
+                "student_id": student_id,
+                "boost": STUDENT_KNOWLEDGE_BOOST,
+                "status": "success" if student_chunks else "no_results",
+            })
+
+        merged = self.merge_chunks([self.keyword_chunks, self.vector_chunks, section_chunks, student_chunks])
 
         # ══════════════════════════════════════════
         # 3.5. Multi-Pass Query Expansion
@@ -310,7 +334,7 @@ class RetrievalOrchestratorAgent:
             else:
                 trace.log_decision("secondary_retry", "no_results", "No definition chunks found")
 
-        log_info(f"Retrieval complete: {len(self.vector_chunks)} vector + {len(self.keyword_chunks)} keyword + {len(section_chunks)} section + {len(context_chunks)} context + {len(expansion_chunks)} expansion + {len(gap_fill_chunks)} gap_fill = {len(final_chunks)} total reranked")
+        log_info(f"Retrieval complete: {len(self.vector_chunks)} vector + {len(self.keyword_chunks)} keyword + {len(section_chunks)} section + {len(student_chunks)} student + {len(context_chunks)} context + {len(expansion_chunks)} expansion + {len(gap_fill_chunks)} gap_fill = {len(final_chunks)} total reranked")
         
         if not final_chunks:
             log_warning(f"No chunks retrieved for query: '{input.rewritten_query}'")
@@ -394,10 +418,26 @@ class RetrievalOrchestratorAgent:
             for c in final_chunks[:5]
         ]
 
+        grounded_mode = (retrieval_confidence.level.value != "HIGH")
+
+        # Explicit enforcement: if student request but matching student chunks are missing or weak -> Force Grounded
+        if student_id:
+            student_chunks_in_final = [
+                c for c in final_chunks 
+                if c.metadata and c.metadata.get("student_id") == student_id
+            ]
+            if not student_chunks_in_final:
+                grounded_mode = True
+                log_info(f"Grounded mode forced: no student chunks found for student_id={student_id}")
+            elif all(c.raw_score < 0.35 for c in student_chunks_in_final):
+                grounded_mode = True
+                log_info(f"Grounded mode forced: all student chunks have low score < 0.35")
+
         retrieval_output = RetrievalOutput(
             chunks = final_chunks,
             retrieval_trace = full_trace,
-            trace_id = self.trace_id
+            trace_id = self.trace_id,
+            grounded_mode = grounded_mode
         )
         
         return retrieval_output

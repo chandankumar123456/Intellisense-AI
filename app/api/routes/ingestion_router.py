@@ -10,8 +10,10 @@ import asyncio
 from pypdf import PdfReader
 from youtube_transcript_api import YouTubeTranscriptApi
 import trafilatura
-from app.agents.retrieval_agent.utils import index, namespace
+
 from app.core.logging import log_info, log_error
+from app.rag.ingestion_pipeline import ingest_document
+from app.core.config import STUDENT_VECTOR_NAMESPACE_PREFIX
 
 router = APIRouter(prefix="/ingest", tags=["ingestion"])
 
@@ -26,128 +28,47 @@ class IngestResponse(BaseModel):
     document_id: str
     chunks_count: int
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
-    words = text.split()
-    chunks = []
-    chunk = []
-    current_len = 0
-    
-    for word in words:
-        chunk.append(word)
-        current_len += 1
-        
-        if current_len >= chunk_size:
-            chunks.append(" ".join(chunk))
-            # Overlap
-            chunk = chunk[-overlap:]
-            current_len = len(chunk)
-            
-    if chunk:
-        chunks.append(" ".join(chunk))
-            
-    return chunks
-
-def upsert_records_sync(records):
-    # This function is run in a thread
+async def run_ingestion_task(
+    text: str,
+    doc_id: str,
+    source_url: str,
+    source_type: str,
+    user_id: str,
+    document_title: str
+):
+    """
+    Background task wrapper for ingest_document.
+    Calculates namespace and handles the async execution.
+    """
     try:
-        # Check if index has upsert method directly or via utils
-        # utils.py exports 'index' which is a LazyIndex wrapper around Pinecone Index
-        # Pinecone Index has .upsert()
+        namespace = f"{STUDENT_VECTOR_NAMESPACE_PREFIX}{user_id}" if user_id else None
         
-        vectors = []
-        for r in records:
-            vectors.append({
-                "id": r["_id"],
-                "values": [0.1] * 1024, # DUMMY VALUES if model not ready, BUT Pinecone inference handles text
-                # WAIT! app/agents/retrieval_agent/utils.py says:
-                # "field_map": {"text": "chunk_text"} 
-                # This implies we send {"id": "x", "values": [...], "metadata": {"chunk_text": "..."}}
-                # OR if using the *Inference API*, inputs might differ.
-                # However, looking at utils.py again, it uses `pc.create_index_for_model`
-                # which creates a Serverless index capable of embedding.
-                # The standard usage for that is usually `index.upsert(vectors=[...])` 
-                # where metadata contains the text field mapped in `field_map`.
-                
-                # Let's assume standard upsert with metadata
-                "metadata": {
-                    "chunk_text": r["chunk_text"],
-                    "source_type": r["source_type"],
-                    "source_url": r["source_url"],
-                    "category": r["metadata"]["category"],
-                    "user_id": r["metadata"]["user_id"],
-                    "doc_id": r["metadata"]["doc_id"]
-                }
-            })
-            
-        # However, for "integrated inference", we often just pass the text if using a specific SDK method.
-        # But `utils.py` uses `vector_db_client.search`.
-        # Let's try standard upsert. If it fails due to missing values, we know.
-        # BUT `create_index_for_model` implies the embedding happens on Pinecone side.
-        # If so, we might need `pinecone-plugin-inference` or similar, OR just pass empty values?
-        # Actually, if the index is configured for embedding, `upsert` requests effectively ignore `values` 
-        # if the client handles it, or we send the text in a specific way.
+        log_info(f"Background ingestion starting for {doc_id} (User: {user_id}, Namespace: {namespace})")
         
-        # Let's verify `utils.py` again. It has `records` list with `chunk_text`.
-        # It has `index.upsert_records(namespace, clean_records)` commmented out.
-        # This suggests `upsert_records` IS a custom helper method or from a library version.
-        # Let's assume standard usage for now: list of dicts.
-        pass
+        result = await ingest_document(
+            text=text,
+            doc_id=doc_id,
+            source_url=source_url,
+            source_type=source_type,
+            user_id=user_id,
+            document_title=document_title,
+            namespace=namespace,
+            # Defaults for auto-detection
+            subject="",
+            topic="",
+            content_type="user_upload"
+        )
+        
+        if result.get("status") == "success":
+            log_info(f"Background ingestion success for {doc_id}")
+        else:
+            log_error(f"Background ingestion returned error for {doc_id}: {result.get('error')}")
 
     except Exception as e:
-        log_error(f"Upsert failed: {e}")
+        log_error(f"Background ingestion execution failed for {doc_id}: {e}")
+        import traceback
+        log_error(traceback.format_exc())
 
-async def process_and_index(text: str, source_url: str, source_type: str, user_id: str, doc_id: str, document_title: str = ""):
-    try:
-        chunks = chunk_text(text)
-        records = []
-        for i, chunk_text in enumerate(chunks):
-            records.append({
-                "_id": f"{doc_id}_{i}",
-                "chunk_text": chunk_text,
-                "source_type": source_type,
-                "source_url": source_url,
-                "metadata": {
-                    "category": "user_upload",
-                    "user_id": user_id,
-                    "doc_id": doc_id
-                }
-            })
-        
-        if records:
-            log_info(f"Upserting {len(records)} chunks for {source_url}...")
-            
-            # Generate embeddings client-side using SentenceTransformer
-            from app.agents.retrieval_agent.utils import embed_text
-            
-            chunk_texts = [r["chunk_text"] for r in records]
-            try:
-                embeddings = await asyncio.to_thread(embed_text, chunk_texts)
-            except Exception as e:
-                log_error(f"Embedding generation failed: {e}")
-                raise
-
-            vectors = []
-            for i, r in enumerate(records):
-                vectors.append({
-                    "id": r["_id"],
-                    "values": embeddings[i], 
-                    "metadata": {
-                        "chunk_text": r["chunk_text"],
-                        "source_type": r["source_type"],
-                        "source_url": r["source_url"],
-                        "category": "user_upload",
-                        "user_id": user_id,
-                        "doc_id": doc_id
-                    }
-                })
-            
-            # Upsert to Pinecone
-            await asyncio.to_thread(index.upsert, vectors=vectors, namespace=namespace)
-            
-            log_info(f"Successfully indexed {source_url}")
-            
-    except Exception as e:
-        log_error(f"Background indexing failed for {source_url}: {e}")
 
 @router.post("/file", response_model=IngestResponse)
 async def ingest_file(
@@ -190,11 +111,20 @@ async def ingest_file(
 
         # Trigger background indexing
         document_title = os.path.splitext(file.filename)[0]  # Strip extension for clean title
-        background_tasks.add_task(process_and_index, text, file.filename, "file", user_id, doc_id, document_title)
+        
+        background_tasks.add_task(
+            run_ingestion_task,
+            text=text,
+            doc_id=doc_id,
+            source_url=file.filename,
+            source_type="file",
+            user_id=user_id,
+            document_title=document_title
+        )
         
         return IngestResponse(
             status="processing",
-            message=f"File {file.filename} is being processed.",
+            message=f"File {file.filename} queued for smart ingestion.",
             document_id=doc_id,
             chunks_count=len(text.split()) // 500  # Estimate
         )
@@ -245,11 +175,19 @@ async def ingest_url(
             raise HTTPException(400, "No content found.")
 
         # Trigger background indexing
-        background_tasks.add_task(process_and_index, text, request.url, request.type, request.user_id, doc_id)
+        background_tasks.add_task(
+            run_ingestion_task,
+            text=text,
+            doc_id=doc_id,
+            source_url=request.url,
+            source_type=request.type,
+            user_id=request.user_id,
+            document_title=request.url  # Use URL as title if no better option
+        )
         
         return IngestResponse(
             status="processing",
-            message=f"URL {request.url} is being processed.",
+            message=f"URL {request.url} queued for smart ingestion.",
             document_id=doc_id,
             chunks_count=len(text.split()) // 500
         )

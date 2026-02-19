@@ -1,0 +1,15 @@
+{
+  "upload_id": "test_trace_001",
+  "student_id": "student_verify",
+  "source_type": "file",
+  "source_uri": "trace_test.txt",
+  "steps": [
+    {
+      "step": "test_step",
+      "status": "ok",
+      "duration_ms": 50,
+      "info": "verified"
+    }
+  ],
+  "start_time": 1771468727.3971896
+}

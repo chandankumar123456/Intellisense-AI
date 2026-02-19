@@ -4,7 +4,7 @@ import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Home, MessageSquare, Clock, Globe, Youtube, Settings,
-  Menu, X, ShieldCheck, Plus, PanelLeftClose, Sparkles, Shield,
+  Menu, X, ShieldCheck, Plus, PanelLeftClose, Sparkles, Shield, BookOpen,
 } from 'lucide-react';
 
 interface NavItem { icon: React.ElementType; label: string; path: string; adminOnly?: boolean; }
@@ -15,6 +15,7 @@ const navItems: NavItem[] = [
   { icon: Clock, label: 'History', path: '/app/history' },
   { icon: Globe, label: 'Web', path: '/app/web' },
   { icon: Youtube, label: 'YouTube', path: '/app/youtube' },
+  { icon: BookOpen, label: 'My Knowledge', path: '/app/knowledge' },
   { icon: ShieldCheck, label: 'Verification', path: '/app/verification' },
   { icon: Shield, label: 'Admin', path: '/app/admin', adminOnly: true },
   { icon: Settings, label: 'Settings', path: '/app/settings' },

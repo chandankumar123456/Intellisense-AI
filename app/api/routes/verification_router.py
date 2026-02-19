@@ -28,4 +28,12 @@ async def verify_claims(
         )
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        log_error(f"Verification failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return {
+            "status": "error",
+            "code": "VERIFICATION_FAILED_INTERNAL",
+            "message": str(e),
+            "trace_id": str(uuid.uuid4())
+        }

@@ -48,14 +48,21 @@ async def ingest_document(
     # Detected metadata overrides
     confidence: float = 0.0,
     secondary_subject: str = "",
+    # New: Namespace support
+    namespace: Optional[str] = None,
 ) -> dict:
     """
     Full ingestion pipeline following EviLearn rules.
+    Atomic: Buffers all chunks/embeddings, then upserts.
+    Rolls back vectors if metadata storage fails.
 
     Returns summary dict with stats.
     """
+    vectors_upserted = False
+    target_namespace = namespace or PINECONE_NAMESPACE
+
     try:
-        log_info(f"Starting ingestion for doc {doc_id} ({len(text)} chars)")
+        log_info(f"Starting ingestion for doc {doc_id} ({len(text)} chars) into namespace '{target_namespace}'")
 
         # 0. Store full document via SAL
         from app.storage import storage_manager
@@ -84,13 +91,10 @@ async def ingest_document(
                 "keywords": keywords,
                 "confidence": confidence,
                 "secondary_subject": secondary_subject,
+                "namespace": target_namespace,
             }).encode("utf-8"),
             "application/json"
         )
-
-        # 0.5 Dynamic Subject Learning & Identification
-        # ---------------------------------------------
-        from app.rag.subject_detector import detect_subject
 
         # 0.5 Dynamic Subject Learning & Identification
         # ---------------------------------------------
@@ -193,7 +197,7 @@ async def ingest_document(
             chunk.source_tag = source_tag
             chunk.keywords = keywords
 
-        # 5. Embed and upsert only qualifying chunks
+        # 5. Prepare Embeddings (Buffer)
         # Rule: Embed if score >= THRESHOLD, OR if teacher tagged.
         # Fallback: If ZERO chunks qualify, embed the top 3 by score to ensure *something* is searchable.
         
@@ -215,11 +219,11 @@ async def ingest_document(
              candidate_to_embedding = {c.id: embeddings[i] for i, c in enumerate(candidates)}
              embed_embeddings = [candidate_to_embedding[c.id] for c in embed_candidates]
 
+        vectors_to_upsert = []
         if embed_candidates:
-            vectors = []
             for i, chunk in enumerate(embed_candidates):
                 chunk.id = chunk.id or f"{doc_id}_{chunk.page}_{i}"
-                vectors.append({
+                vectors_to_upsert.append({
                     "id": chunk.id,
                     "values": embed_embeddings[i],
                     "metadata": {
@@ -245,39 +249,30 @@ async def ingest_document(
                         "difficulty_level": chunk.difficulty_level,
                         "source_tag": chunk.source_tag,
                         "keywords": chunk.keywords,
+                        "namespace": target_namespace,
                     },
                 })
 
-            await asyncio.to_thread(
-                storage_manager.vectors.upsert, vectors=vectors, namespace=PINECONE_NAMESPACE
-            )
-            log_info(
-                f"Embedded {len(embed_candidates)}/{len(candidates)} chunks. "
-                f"(Threshold: {IMPORTANCE_EMBED_THRESHOLD}, Fallback used: {'Yes' if not any(c.importance_score >= IMPORTANCE_EMBED_THRESHOLD for c in embed_candidates) else 'No'})"
-            )
-
-        # 6. Create metadata entries for ALL chunks (embedded + raw)
+        # 6. Prepare Metadata Entries (Buffer)
         metadata_entries = []
-        for i, chunk in enumerate(candidates):
-            # If we don't know the exact path prefix here easily without asking the file storage, 
-            # we can just store the doc_id and let the retriever resolve it via SAL.
-            # But the prompt required "local://..." or "s3://...".
-            # The SAL save_file returns the full path/URI. 
-            # We didn't capture it above for the main doc, but we know the pattern.
-            # Let's ask the storage manager's file adapter for the scheme/prefix if needed, 
-            # or just rely on the stored doc_id. 
-            # However, existing metadata has `storage_pointer`.
-            # Let's reconstruct it or simplify.
-            
-            # Since we are using SAL, `storage_pointer` is less critical if we fetch via SAL using doc_id.
-            # But to maintain data shape:
-            from app.core.config import STORAGE_MODE
-            storage_pointer = (
-                f"s3://{S3_BUCKET_NAME}/{S3_DOCUMENT_PREFIX}/{doc_id}"
-                if STORAGE_MODE == "aws"
-                else f"local://{doc_id}"
-            )
-            
+        from app.core.config import STORAGE_MODE
+        # Need S3_BUCKET_NAME/PREFIX from config ideally, but assuming imports exist or we mock
+        # For simplicity, using "local" prefix default if not AWS.
+        # We can re-import inside the function if needed or rely on global scope if defined.
+        # But better to be safe:
+        try:
+            from app.core.config import S3_BUCKET_NAME, S3_DOCUMENT_PREFIX
+        except ImportError:
+            S3_BUCKET_NAME = "evilearn-docs"
+            S3_DOCUMENT_PREFIX = "documents"
+
+        storage_pointer = (
+            f"s3://{S3_BUCKET_NAME}/{S3_DOCUMENT_PREFIX}/{doc_id}"
+            if STORAGE_MODE == "aws"
+            else f"local://{doc_id}"
+        )
+
+        for i, chunk in enumerate(candidates):           
             metadata_entries.append({
                 "id": chunk.id or f"{doc_id}_{chunk.page}_{i}",
                 "doc_id": chunk.doc_id,
@@ -306,10 +301,27 @@ async def ingest_document(
                 "keywords": chunk.keywords,
                 "confidence": confidence,
                 "secondary_subject": secondary_subject,
+                "namespace": target_namespace,
             })
 
+        # 7. Execute Atomic Upsert Sequence
+        
+        # Step A: Upsert Vectors
+        if vectors_to_upsert:
+            log_info(f"Upserting {len(vectors_to_upsert)} vectors to namespace '{target_namespace}'...")
+            await asyncio.to_thread(
+                storage_manager.vectors.upsert, 
+                vectors=vectors_to_upsert, 
+                namespace=target_namespace
+            )
+            vectors_upserted = True
+
+        # Step B: Upsert Metadata
+        # If this fails, we rollback vectors
+        log_info(f"Upserting {len(metadata_entries)} metadata entries...")
         storage_manager.metadata.upsert_batch(metadata_entries)
-        log_info(f"Metadata indexed for all {len(metadata_entries)} chunks")
+        
+        log_info(f"Ingestion complete for {doc_id}. Namespace: {target_namespace}")
 
         return {
             "status": "success",
@@ -317,10 +329,28 @@ async def ingest_document(
             "chunks_total": len(candidates),
             "chunks_embedded": len(embed_candidates),
             "chunks_raw_only": len(candidates) - len(embed_candidates),
+            "namespace": target_namespace,
         }
 
     except Exception as e:
         log_error(f"Ingestion pipeline failed for doc {doc_id}: {e}")
+        
+        # Rollback: Delete inserted vectors if we managed to insert them but failed later
+        if vectors_upserted:
+            log_warning(f"Rolling back vectors for doc {doc_id} in namespace {target_namespace} due to failure...")
+            try:
+                # We need the IDs we inserted
+                ids_to_delete = [v["id"] for v in vectors_to_upsert] if 'vectors_to_upsert' in locals() else []
+                if ids_to_delete:
+                    await asyncio.to_thread(
+                        storage_manager.vectors.delete,
+                        ids=ids_to_delete,
+                        namespace=target_namespace
+                    )
+                    log_info("Rollback successful.")
+            except Exception as rollback_err:
+                 log_error(f"Rollback failed: {rollback_err}")
+
         import traceback
         log_error(traceback.format_exc())
         return {"status": "error", "error": str(e)}

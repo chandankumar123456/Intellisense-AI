@@ -28,6 +28,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const ClaimValidationPage = lazy(() => import('./pages/ClaimValidationPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
+const StudentKnowledgePage = lazy(() => import('./pages/StudentKnowledgePage'));
 
 function App() {
   return (
@@ -73,6 +74,7 @@ function App() {
                         <Route path="web" element={<WebSourcesPage />} />
                         <Route path="youtube" element={<YouTubePage />} />
                         <Route path="verification" element={<ClaimValidationPage />} />
+                        <Route path="knowledge" element={<StudentKnowledgePage />} />
                         <Route path="admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
                         <Route path="settings" element={<SettingsPage />} />
                       </Route>

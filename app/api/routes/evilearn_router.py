@@ -25,6 +25,7 @@ from app.infrastructure.metadata_store import (
     get_eviction_candidates,
 )
 from app.rag.subject_detector import detect_subject
+from app.core.config import STUDENT_VECTOR_NAMESPACE_PREFIX
 
 router = APIRouter(prefix="/api/evilearn", tags=["evilearn"])
 
@@ -228,6 +229,10 @@ async def ingest_file(
         async def _ingest_with_original():
             """Upload original file then run smart ingestion."""
             store_original_file(doc_id, file.filename, original_bytes)
+            
+            # Determine namespace
+            namespace = f"{STUDENT_VECTOR_NAMESPACE_PREFIX}{user_id}" if user_id else None
+
             await ingest_document(
                 text=text,
                 doc_id=doc_id,
@@ -248,6 +253,7 @@ async def ingest_file(
                 # Pass detected metadata
                 confidence=detected_confidence,
                 secondary_subject=detected_secondary,
+                namespace=namespace
             )
 
         background_tasks.add_task(_ingest_with_original)
@@ -315,16 +321,23 @@ async def reindex_document(
         raise HTTPException(404, f"Document {request.doc_id} not found in storage")
 
     from app.rag.ingestion_pipeline import ingest_document
-    background_tasks.add_task(
-        ingest_document,
-        text=text,
-        doc_id=request.doc_id,
-        user_id=request.user_id,
-        syllabus_keywords=request.syllabus_keywords,
-        subject=request.subject,
-        topic=request.topic,
-        subtopic=request.subtopic,
-    )
+    
+    async def _reindex_task():
+        # Determine namespace
+        namespace = f"{STUDENT_VECTOR_NAMESPACE_PREFIX}{request.user_id}" if request.user_id else None
+        
+        await ingest_document(
+            text=text,
+            doc_id=request.doc_id,
+            user_id=request.user_id,
+            syllabus_keywords=request.syllabus_keywords,
+            subject=request.subject,
+            topic=request.topic,
+            subtopic=request.subtopic,
+            namespace=namespace
+        )
+
+    background_tasks.add_task(_reindex_task)
 
     return {
         "status": "processing",

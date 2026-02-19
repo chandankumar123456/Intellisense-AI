@@ -290,6 +290,7 @@ class PipelineControllerAgent:
                     intent_result=intent_result,  # Pass intent for section-aware retrieval
                     subject_scope=search_scope,  # Pass potentially broadened scope
                     query_type=query_type_result.query_type.value,  # Pass for dynamic weighting
+                    student_id=user_id,  # Enable student knowledge retrieval
                 )
             
             # FIX: Automatic Fallback for Subject Filtering
@@ -310,6 +311,7 @@ class PipelineControllerAgent:
                     intent_result=intent_result,
                     subject_scope=fallback_scope,
                     query_type=query_type_result.query_type.value,
+                    student_id=user_id,
                 )
                 
                 # Update trace to indicate fallback happened
@@ -384,6 +386,7 @@ class PipelineControllerAgent:
                     intent_result=intent_result,
                     subject_scope=subject_scope,
                     query_type=query_type_result.query_type.value,
+                    student_id=user_id,
                 )
                 
                 retry_validation = validate_retrieval(

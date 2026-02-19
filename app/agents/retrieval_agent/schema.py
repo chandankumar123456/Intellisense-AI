@@ -43,3 +43,4 @@ class RetrievalOutput(BaseModel):
     chunks: List[Chunk]                
     retrieval_trace: Dict[str, Any]              
     trace_id: str
+    grounded_mode: bool = False
