@@ -1,15 +1,31 @@
 # app/rag/reranker.py
 """
 Re-ranking engine combining semantic similarity, keyword overlap,
-section matching, and document-specificity boosting.
+section matching, document-specificity boosting, generic chunk penalty,
+and information density bonus.
 Used after coarse retrieval to select top passages per claim.
 """
 
 import re
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
-from app.core.config import RERANK_TOP_K
+from app.core.config import (
+    RERANK_TOP_K,
+    GENERIC_CHUNK_PENALTY,
+    INFO_DENSITY_BONUS_WEIGHT,
+)
 from app.core.logging import log_info
+
+
+# Common filler / generic words that don't carry information
+_GENERIC_WORDS = frozenset({
+    "the", "a", "an", "is", "are", "was", "were", "be", "been",
+    "being", "have", "has", "had", "do", "does", "did", "will",
+    "would", "could", "should", "may", "might", "shall", "can",
+    "of", "in", "to", "for", "with", "on", "at", "by", "from",
+    "as", "into", "about", "that", "this", "it", "and", "or",
+    "but", "not", "no", "if", "then", "so",
+})
 
 
 def _tokenize(text: str) -> set:
@@ -40,8 +56,6 @@ def _compute_definition_score(text: str) -> float:
     """Detect definitional patterns in text."""
     text_lower = text.lower()
     
-    # Strong definition indicators
-    # "is a", "refers to", "defined as", "consists of"
     patterns = [
         r"\bis\s+a\b", r"\bare\s+a\b", 
         r"\brefers\s+to\b", 
@@ -61,12 +75,79 @@ def _compute_definition_score(text: str) -> float:
         if re.search(pat, text_lower):
             score += 0.3
     
-    # Boost for structural words if length is sufficient
     if len(text.split()) > 30:
         if "therefore" in text_lower or "hence" in text_lower or "specifically" in text_lower:
             score += 0.1
             
     return min(score, 1.0)
+
+
+def _compute_info_density(text: str) -> float:
+    """
+    Compute information density: ratio of unique meaningful words to total words.
+    Higher density = more informative, less repetitive.
+    Returns 0-1 score.
+    """
+    words = re.findall(r"\b\w+\b", text.lower())
+    if not words:
+        return 0.0
+
+    word_count = len(words)
+    meaningful = [w for w in words if w not in _GENERIC_WORDS and len(w) > 2]
+    unique_meaningful = set(meaningful)
+
+    if word_count < 10:
+        return 0.1  # Very short = low density
+
+    # Ratio of unique meaningful words to total words
+    density = len(unique_meaningful) / word_count
+
+    # Bonus for substantive length
+    length_bonus = min(0.3, word_count / 300.0)
+
+    return min(1.0, density + length_bonus)
+
+
+def _is_generic_chunk(text: str) -> bool:
+    """
+    Detect overly generic chunks that don't carry useful information.
+    E.g. table of contents, headers-only, boilerplate.
+    """
+    words = re.findall(r"\b\w+\b", text.lower())
+    if not words:
+        return True
+
+    # Very short chunks with no substance
+    if len(words) < 8:
+        return True
+
+    # High ratio of generic/stop words = generic content
+    generic_count = sum(1 for w in words if w in _GENERIC_WORDS)
+    generic_ratio = generic_count / len(words)
+
+    return generic_ratio > 0.75
+
+
+def _normalize_scores(passages: List[Dict[str, Any]], key: str = "score") -> None:
+    """
+    Normalize scores in-place to [0, 1] range across all passages.
+    Handles mixed scoring scales from different retrieval passes.
+    """
+    scores = [p.get(key, 0.0) for p in passages]
+    if not scores:
+        return
+
+    max_s = max(scores)
+    min_s = min(scores)
+    spread = max_s - min_s
+
+    if spread < 1e-8:
+        # All scores are the same — set to 0.5
+        for p in passages:
+            p[key] = 0.5
+    else:
+        for p in passages:
+            p[key] = (p.get(key, 0.0) - min_s) / spread
 
 
 def rerank_passages(
@@ -85,19 +166,24 @@ def rerank_passages(
 ) -> List[Dict[str, Any]]:
     """
     Re-rank passages combining semantic score, keyword overlap,
-    section match bonus, and document-specificity bonus.
+    section match bonus, document-specificity bonus, information density,
+    and generic chunk penalty.
     
     For conceptual queries: adjusts weights to favor definitions and explanations.
+    Includes score normalization for cross-pass stability.
     """
     if not passages:
         return []
-        
+
+    # ── Score normalization across retrieval passes ──
+    _normalize_scores(passages, key="score")
+
     # Adjust weights for conceptual queries
     definition_weight = 0.0
     if is_conceptual:
-        semantic_weight = 0.55
-        definition_weight = 0.20
-        keyword_weight = 0.15
+        semantic_weight = 0.50
+        definition_weight = 0.18
+        keyword_weight = 0.14
         section_boost_weight = 0.08
         document_boost_weight = 0.02
 
@@ -111,7 +197,7 @@ def rerank_passages(
         # Keyword overlap score
         kw_score = _keyword_overlap(query_tokens, pass_tokens)
 
-        # Semantic score
+        # Semantic score (already normalized)
         sem_score = passage.get("score", 0.0)
 
         # If we have embeddings, compute fresh cosine similarity
@@ -128,14 +214,11 @@ def rerank_passages(
             if passage_section == target_section:
                 section_match = 1.0
                 
-        # Conceptual Boost
-        # If query is conceptual, prioritize Definition/Introduction/Overview sections
         if is_conceptual:
             if passage_section and any(x in passage_section for x in ["definition", "introduction", "overview"]):
-                # Boost significantly (similar to target_section) to bubble up definitions
                 section_match = max(section_match, 0.8)
 
-        # Document-specificity bonus — prefer user-uploaded content
+        # Document-specificity bonus
         doc_match = 0.0
         if prefer_user_documents:
             source_type = passage.get("source_type", "")
@@ -148,12 +231,17 @@ def rerank_passages(
         def_score = 0.0
         if is_conceptual:
             def_score = _compute_definition_score(text)
-            
-        # Mention-only penalty
-        # If passage is short (< 20 words) and has no definition signal -> penalize
-        penalty = 0.0
+
+        # ── NEW: Information density bonus ──
+        info_density = _compute_info_density(text)
+
+        # ── NEW: Generic chunk penalty ──
+        generic_penalty = GENERIC_CHUNK_PENALTY if _is_generic_chunk(text) else 0.0
+
+        # Short mention-only penalty
+        mention_penalty = 0.0
         if len(text.split()) < 20 and def_score < 0.1:
-            penalty = -0.2
+            mention_penalty = -0.2
 
         # Combined score
         combined = (
@@ -162,7 +250,9 @@ def rerank_passages(
             + (section_boost_weight * section_match)
             + (document_boost_weight * doc_match)
             + (definition_weight * def_score)
-            + penalty
+            + (INFO_DENSITY_BONUS_WEIGHT * info_density)
+            + generic_penalty
+            + mention_penalty
         )
 
         scored.append({
@@ -171,12 +261,16 @@ def rerank_passages(
             "semantic_score": round(sem_score, 6),
             "keyword_score": round(kw_score, 6),
             "definition_presence_score": round(def_score, 6),
+            "info_density_score": round(info_density, 6),
+            "is_generic": _is_generic_chunk(text),
             "section_match": section_match > 0,
             "document_match": doc_match > 0,
         })
 
-    # Sort by re-rank score descending
-    scored.sort(key=lambda x: x["rerank_score"], reverse=True)
+    # ── Stable sort: score descending, then chunk_id for deterministic tie-breaking ──
+    scored.sort(
+        key=lambda x: (-x["rerank_score"], x.get("chunk_id", "") or ""),
+    )
 
     result = scored[:top_k]
     log_info(

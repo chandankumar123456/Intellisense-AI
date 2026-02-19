@@ -1,137 +1,74 @@
-# 🧠 IntelliSense AI – Agentic RAG Platform
+# 🧠 IntelliSense AI – Autonomous Agentic RAG
 
-**IntelliSense AI** is a next-generation **Agentic RAG (Retrieval-Augmented Generation)** platform designed to provide deep, context-aware intelligence from your documents. Unlike simple RAG systems, IntelliSense AI uses a sophisticated multi-agent architecture (Orchestrator, Writer, Reviewer) to understand user intent, manage sessions, and deliver precise, high-quality answers.
+**IntelliSense AI** is a next-generation **Autonomous Agentic RAG** platform designed to provide self-optimizing, context-aware intelligence from your documents. Unlike simple RAG systems, IntelliSense AI uses a sophisticated multi-agent architecture (Controller, Orchestrator, Synthesizer) to understand user intent, self-correct retrieval failures, and deliver precise, high-confidence answers.
 
----
-
-## 🏗️ Architecture Overview
-
--   **Backend:** FastAPI (Python) with `Agno` (Agentic Framework) & to `uv` (Dependency Management).
--   **Frontend:** React (TypeScript) with Tailwind CSS & Lucide Icons.
--   **Vector Logic:** Hybrid Search (Semantic + Keyword) with dynamic reranking.
--   **Storage Modes:**
-    -   **Local Mode (Default):** Uses local filesystem & ChromaDB (No Cloud needed!).
-    -   **AWS Mode:** Uses S3 for documents & Pinecone for vectors (Production scale).
--   **Database:** Redis (for high-speed session caching & chat history).
+The system features an advanced **Retrieval Intelligence Engine** that learns from past interactions, adapts to query complexity, and aggressively filters noise to prevent hallucinations.
 
 ---
 
-## 🚀 Quick Start (Local Mode)
+## 🏗️ System Architecture
 
-This is the easiest way to run IntelliSense AI on your local machine without needing AWS keys or Pinecone.
+The system operates as a collaborative multi-agent pipeline:
 
-### 1. Prerequisites
+```mermaid
+flowchart TD
+    User[User Query] --> Controller[Pipeline Controller]
+    
+    subgraph "Phase 1: Understanding"
+        Controller --> Understand[Query Understanding Agent]
+        Understand --> Intent[Intent & Scope Detection]
+        Intent --> Rewrite[Structural Query Rewriting]
+    end
 
-Ensure you have the following installed:
+    subgraph "Phase 2: Retrieval Intelligence"
+        Rewrite --> Orchestrator[Retrieval Orchestrator]
+        Orchestrator --> Search[Vector + Keyword + Section Search]
+        Search --> Hierarchy[Hierarchical Rerank\n(Doc → Section → Chunk)]
+        Hierarchy --> Clustering[Chunk Clustering & Dedup]
+        Clustering --> Coverage{Coverage Check}
+        Coverage -->|Gap Found| GapFill[Semantic Gap-Fill]
+        Coverage -->|Sufficient| Confidence[Adaptive Confidence]
+        GapFill --> Confidence
+        Confidence --> Memory[Retrieval Memory\n(Learning Layer)]
+    end
 
-*   [**Python 3.10+**](https://www.python.org/)
-*   [**Node.js (v18+) & npm**](https://nodejs.org/)
-*   [**Docker Desktop**](https://www.docker.com/products/docker-desktop/) (Required for Redis)
-*   **[uv](https://github.com/astral-sh/uv)** (Highly recommended for Python speed):
-    ```bash
-    # On Windows (PowerShell)
-    powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-    # On macOS/Linux
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    ```
+    subgraph "Phase 3: Synthesis & Verification"
+        Memory --> Validation{Failure Prediction}
+        Validation -->|High Risk| Grounded[Grounded Mode]
+        Validation -->|Low Risk| Synth[Response Synthesizer]
+        Grounded --> Synth
+        Synth --> Verify[Context Verification]
+    end
 
-### 2. Clone the Repository
-
-```bash
-git clone https://github.com/chandankumar123456/intellisense-ai.git
-cd intellisense-ai
-```
-
-### 3. Start Infrastructure (Redis)
-
-Start a Redis container for session management:
-
-```bash
-docker run -d --name redis-server -p 6379:6379 redis
+    Verify --> Final[Final Response]
 ```
 
 ---
 
-### 4. Backend Setup (FastAPI)
+## ✨ Retrieval Intelligence Engine
 
-1.  **Install Python Dependencies:**
-    ```bash
-    uv sync
-    ```
+The core differentiator of IntelliSense AI is its **self-optimizing retrieval capabilities**:
 
-2.  **Configure Environment Variables:**
-    Create a `.env` file in the root directory:
-    ```env
-    # --- LLM API Keys (Required) ---
-    GROQ_API_KEY="your_groq_api_key"
-    GOOGLE_API_KEY="your_google_api_key"
-    # OPENAI_API_KEY="your_openai_key" # Optional, if using OpenAI models
-    
-    # --- Storage Configuration (Local Mode) ---
-    STORAGE_MODE="local"
-    
-    # --- Redis Configuration ---
-    REDIS_HOST="localhost"
-    REDIS_PORT=6379
-    
-    # --- Optional Tracing ---
-    # LANGSMITH_TRACING="true"
-    # LANGSMITH_API_KEY="your_key"
-    ```
+### 1. 📂 Hierarchical Retrieval (Structure-Aware)
+Instead of flattening documents into isolated chunks, the system understands document structure. It prioritizes the best **Documents** first, then the most relevant **Sections** (e.g., "Methodology", "Conclusion"), and finally the specific **Chunks**. This ensures context is drawn from authoritative sections rather than random mentions.
 
-3.  **Run the Backend Server:**
-    ```bash
-    uv run uvicorn app.main:app --reload
-    ```
-    ✅ **Backend is running at:** `http://localhost:8000`  
-    📄 **API Docs:** `http://localhost:8000/docs`
+### 2. 🧠 Long-Term Retrieval Memory
+The system **learns** from every interaction. It tracks which retrieval patterns (e.g., "Definitions work best for conceptual queries") lead to successful answers. Over time, it builds a database of successful strategies and uses them to boost future retrieval performance.
 
----
+### 3. 🎯 Semantic Coverage Optimizer
+The system explicitly extracts **key concepts** from your query and measures if the retrieved context covers them. If concepts are missing, it triggers targeted **Needle-in-a-Haystack** gap-fill queries to complete the picture before attempting to answer.
 
-### 5. Frontend Setup (React)
+### 4. ⚖️ Adaptive Confidence Thresholds
+Static thresholds fail because queries vary in difficulty. IntelliSense AI dynamically calculates confidence thresholds based on **Query Complexity** (simple vs. complex) and **Query Type** (Factual, Conceptual, Comparative). It demands stronger evidence for rigorous questions.
 
-Open a **new terminal** window:
+### 5. 🔮 Pre-Synthesis Failure Prediction
+Before sending data to the LLM, a **Failure Predictor** analyzes the retrieved context. If it detects low coverage, fragmentation, or weak signals, it preemptively activates **Grounded Mode** or triggers a retry, preventing hallucinations before they happen.
 
-1.  **Navigate to Frontend:**
-    ```bash
-    cd notebook-lm-frontend
-    ```
+### 6. 🧩 Semantic Chunk Clustering
+To reduce noise, the system clusters semantically similar chunks and keeps only the highest-density representative. This removes redundancy and ensures the context window is filled with diverse, high-value information.
 
-2.  **Install Node Modules:**
-    ```bash
-    npm install
-    ```
-    *(Note: If you see legacy peer dependency errors, run `npm install --legacy-peer-deps`)*
-
-3.  **Start the React App:**
-    ```bash
-    npm start
-    ```
-    ✅ **Frontend is running at:** `http://localhost:3000`
-
----
-
-## ☁️ Production Setup (AWS + Pinecone)
-
-To run in production mode with cloud storage and scalable vector search:
-
-1.  **Update `.env`:**
-    ```env
-    STORAGE_MODE="aws"
-    
-    # AWS Credentials
-    AWS_ACCESS_KEY_ID="your_aws_key"
-    AWS_SECRET_ACCESS_KEY="your_aws_secret"
-    AWS_REGION="us-east-1"
-    S3_BUCKET_NAME="your-s3-bucket-name"
-    
-    # Pinecone Credentials
-    PINECONE_API_KEY="your_pinecone_key"
-    PINECONE_INDEX_NAME="intellisense-ai-dense-index-v2"
-    ```
-
-2.  **Restart Backend:**
-    The application will automatically switch from local filesystem/ChromaDB to S3/Pinecone.
+### 7. 🔍 Structured Trace Logging
+Every decision—from query expansion to failure prediction—is logged in a structured trace. This provides complete observability into *why* the system retrieved specific content and how it made confidence decisions.
 
 ---
 
@@ -139,39 +76,99 @@ To run in production mode with cloud storage and scalable vector search:
 
 ```text
 IntelliSense-AI/
-├── app/                        # 🧠 Backend Logic
-│   ├── agents/                 # Agent definitions (Orchestrator, Writer, etc.)
-│   ├── api/                    # FastAPI Routes (Chat, Auth, Ingestion)
-│   ├── core/                   # Config, logging, and exceptions
-│   ├── storage/                # Storage adapters (Local/S3, Chroma/Pinecone)
-│   └── main.py                 # Application Entry Point
-├── data/                       # 💽 Local Data Storage (Created on runtime)
-│   ├── documents/              # Uploaded files (in Local Mode)
-│   ├── metadata_index.db       # SQLite metadata store
-│   └── chroma_db/              # ChromaDB vector store
-├── notebook-lm-frontend/       # ⚛️ React Frontend
-│   ├── src/
-│   │   ├── components/         # Reusable UI components
-│   │   ├── pages/              # Application pages (Chat, Admin)
-│   │   └── services/           # API client services
-├── scripts/                    # 🛠️ Utility / Migration Scripts
-├── requirements.txt            # Python Dependencies
-└── README.md                   # Project Documentation
+├── app/
+│   ├── agents/
+│   │   ├── pipeline_controller_agent/ # 🧠 The Brain (Flow Control)
+│   │   ├── retrieval_agent/           # 🔍 Orchestrator (Search & Optimization)
+│   │   ├── query_understanding_agent/ # 🗣️ Intent & Scope Analysis
+│   │   ├── response_synthesizer_agent/# ✍️ Answer Generation
+│   │   ├── claim_extraction_agent/    # 🧪 EviLearn Fact Extraction
+│   │   └── verification_agent/        # ✅ EviLearn Fact Checking
+│   ├── rag/                           # ⚙️ Core Intelligence Modules
+│   │   ├── hierarchical_retriever.py  # Structure-Aware Search
+│   │   ├── retrieval_memory.py        # Learning Layer (SQLite)
+│   │   ├── adaptive_confidence.py     # Dynamic Thresholds
+│   │   ├── semantic_coverage.py       # Concept Gap-Filling
+│   │   ├── failure_predictor.py       # Pre-Synthesis Guard
+│   │   ├── chunk_clusterer.py         # Dedup & Clustering
+│   │   ├── retrieval_trace.py         # Structured Logging
+│   │   └── retrieval_confidence.py    # Scoring Logic
+│   ├── api/                           # FastAPI Routes
+│   ├── core/                          # Config & Logging
+│   └── storage/                       # Adapters (Local/S3/Pinecone)
+├── data/                              # Local Data Storage
+├── notebook-lm-frontend/              # ⚛️ React Frontend
+└── tests/                             # Unit & Smoke Tests
 ```
 
 ---
+
+## 🚀 Quick Start (Local Mode)
+
+All you need is Python, Node.js, and Docker.
+
+### 1. Prerequisites
+*   [**Python 3.10+**](https://www.python.org/)
+*   [**Node.js (v18+)**](https://nodejs.org/)
+*   [**Docker**](https://www.docker.com/) (for Redis)
+*   **[uv](https://github.com/astral-sh/uv)** (Recommended package manager)
+
+### 2. Start Infrastructure
+Start Redis for session caching:
+```bash
+docker run -d --name redis-server -p 6379:6379 redis
+```
+
+### 3. Backend Setup
+```bash
+# Clone and enter repo
+git clone https://github.com/chandankumar123456/intellisense-ai.git
+cd intellisense-ai
+
+# Install dependencies
+uv sync
+
+# Configure .env
+cp .env.example .env
+# Edit .env with your GROQ_API_KEY or OPENAI_API_KEY
+
+# Run Server
+uv run uvicorn app.main:app --reload
+```
+API Docs will be at: `http://localhost:8000/docs`
+
+### 4. Frontend Setup
+```bash
+cd notebook-lm-frontend
+npm install
+npm start
+```
+Frontend will be at: `http://localhost:3000`
+
+---
+
+## ⚙️ Configuration
+
+Key configuration flags in `app/core/config.py` allow you to toggle intelligence features:
+
+```python
+HIERARCHICAL_RETRIEVAL_ENABLED = True  # Enable/Disable structure awareness
+RETRIEVAL_MEMORY_ENABLED = True        # Enable/Disable learning
+ADAPTIVE_CONFIDENCE_ENABLED = True     # Enable/Disable dynamic thresholds
+FAILURE_PREDICTION_ENABLED = True      # Enable/Disable pre-synthesis guards
+CHUNK_CLUSTERING_ENABLED = True        # Enable/Disable redundancy removal
+```
 
 ## 🛠️ Troubleshooting
 
 | Issue | Solution |
 | :--- | :--- |
-| **Redis Connection Error** | Ensure Docker is running and the container is active: `docker ps`. If stopped, run `docker start redis-server`. |
-| **`ModuleNotFoundError`** | Run `uv sync` to install missing Python packages. |
-| **Frontend Connection Refused** | Ensure the backend is running on port `8000`. Check browser console (`F12`) for CORS errors (though CORS is enabled by default). |
-| **Ingestion Fails** | In Local Mode, ensure the `data/` directory is writable. In AWS Mode, check your S3 bucket permissions. |
+| **Redis Connection Error** | Check if Docker container `redis-server` is running. |
+| **No Retrieval Results** | Ensure you have uploaded documents in the "Data" tab. Check `subject_filter` logs. |
+| **Frontend Connection Refused** | Ensure backend is running on port 8000. |
+| **Ingestion Errors** | Check `data/` directory permissions (Local Mode) or S3 credentials (AWS Mode). |
 
 ---
 
 ## 📜 License
-
-This project is licensed under the MIT License.
+MIT License

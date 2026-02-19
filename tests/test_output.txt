@@ -1,0 +1,40 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.12, pytest-9.0.1, pluggy-1.6.0 -- E:\Projects\IntelliSense AI\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: E:\Projects\IntelliSense AI
+configfile: pyproject.toml
+plugins: anyio-4.12.0, langsmith-0.4.49
+collecting ... collected 30 items
+
+tests/test_retrieval_optimization.py::TestHierarchicalRetriever::test_basic_rerank PASSED [  3%]
+tests/test_retrieval_optimization.py::TestHierarchicalRetriever::test_few_chunks_passthrough PASSED [  6%]
+tests/test_retrieval_optimization.py::TestHierarchicalRetriever::test_empty_chunks PASSED [ 10%]
+tests/test_retrieval_optimization.py::TestHierarchicalRetriever::test_target_section_boost PASSED [ 13%]
+tests/test_retrieval_optimization.py::TestRetrievalMemory::test_record_and_boosts PASSED [ 16%]
+tests/test_retrieval_optimization.py::TestRetrievalMemory::test_threshold_hints_cold_start PASSED [ 20%]
+tests/test_retrieval_optimization.py::TestRetrievalMemory::test_cleanup PASSED [ 23%]
+tests/test_retrieval_optimization.py::TestAdaptiveConfidence::test_default_thresholds PASSED [ 26%]
+tests/test_retrieval_optimization.py::TestAdaptiveConfidence::test_conceptual_lower_thresholds PASSED [ 30%]
+tests/test_retrieval_optimization.py::TestAdaptiveConfidence::test_complexity_lowers_thresholds PASSED [ 33%]
+tests/test_retrieval_optimization.py::TestAdaptiveConfidence::test_memory_blend PASSED [ 36%]
+tests/test_retrieval_optimization.py::TestAdaptiveConfidence::test_compute_complexity PASSED [ 40%]
+tests/test_retrieval_optimization.py::TestSemanticCoverage::test_extract_concepts PASSED [ 43%]
+tests/test_retrieval_optimization.py::TestSemanticCoverage::test_measure_coverage_full PASSED [ 46%]
+tests/test_retrieval_optimization.py::TestSemanticCoverage::test_measure_coverage_empty PASSED [ 50%]
+tests/test_retrieval_optimization.py::TestSemanticCoverage::test_identify_gaps PASSED [ 53%]
+tests/test_retrieval_optimization.py::TestSemanticCoverage::test_build_gap_queries PASSED [ 56%]
+tests/test_retrieval_optimization.py::TestSemanticCoverage::test_full_analyze_coverage PASSED [ 60%]
+tests/test_retrieval_optimization.py::TestFailurePredictor::test_no_chunks PASSED [ 63%]
+tests/test_retrieval_optimization.py::TestFailurePredictor::test_good_chunks PASSED [ 66%]
+tests/test_retrieval_optimization.py::TestFailurePredictor::test_fragmented_chunks PASSED [ 70%]
+tests/test_retrieval_optimization.py::TestChunkClusterer::test_removes_duplicates PASSED [ 73%]
+tests/test_retrieval_optimization.py::TestChunkClusterer::test_preserves_diverse_chunks PASSED [ 76%]
+tests/test_retrieval_optimization.py::TestChunkClusterer::test_empty_input PASSED [ 80%]
+tests/test_retrieval_optimization.py::TestDynamicConfidenceWeighting::test_conceptual_weights PASSED [ 83%]
+tests/test_retrieval_optimization.py::TestDynamicConfidenceWeighting::test_fact_verification_weights PASSED [ 86%]
+tests/test_retrieval_optimization.py::TestDynamicConfidenceWeighting::test_default_weights PASSED [ 90%]
+tests/test_retrieval_optimization.py::TestRetrievalTraceCollector::test_basic_trace PASSED [ 93%]
+tests/test_retrieval_optimization.py::TestRetrievalTraceCollector::test_summary PASSED [ 96%]
+tests/test_retrieval_optimization.py::TestRetrievalTraceCollector::test_chunks_snapshot PASSED [100%]
+
+============================= 30 passed in 0.34s ==============================

@@ -91,3 +91,51 @@ S3_DOCUMENT_PREFIX = "documents"  # top-level key prefix in bucket
 STORAGE_MODE = _os.getenv("STORAGE_MODE", "aws").lower()
 CHROMA_DB_PATH = _os.path.join("local_storage", "chroma_db")
 LOCAL_STORAGE_PATH = "local_storage"
+
+# ── Multi-Stage Retrieval ──
+QUERY_EXPANSION_ENABLED = True
+MAX_EXPANSION_VARIANTS = 3
+EXPANSION_MERGE_DEDUP_THRESHOLD = 0.92
+
+# ── Retrieval Confidence ──
+RETRIEVAL_CONFIDENCE_HIGH = 0.70
+RETRIEVAL_CONFIDENCE_LOW = 0.35
+
+# ── Context Verification ──
+CONTEXT_VERIFICATION_ENABLED = True
+MIN_ENTITY_COVERAGE = 0.40
+MIN_ANSWER_SIGNAL_SCORE = 0.25
+
+# ── Hallucination Control ──
+GROUNDED_MODE_THRESHOLD = 0.35
+
+# ── Ranking Stability ──
+GENERIC_CHUNK_PENALTY = -0.15
+INFO_DENSITY_BONUS_WEIGHT = 0.10
+
+# ── Hierarchical Retrieval ──
+HIERARCHICAL_RETRIEVAL_ENABLED = True
+HIERARCHICAL_TOP_DOCS = 3
+HIERARCHICAL_SECTION_BOOST = 0.15
+
+# ── Retrieval Memory ──
+RETRIEVAL_MEMORY_ENABLED = True
+RETRIEVAL_MEMORY_DB_PATH = "data/retrieval_memory.db"
+RETRIEVAL_MEMORY_DECAY_DAYS = 30
+
+# ── Semantic Coverage ──
+SEMANTIC_COVERAGE_MIN = 0.70
+COVERAGE_GAP_FILL_ENABLED = True
+MAX_GAP_FILL_QUERIES = 3
+
+# ── Failure Prediction ──
+FAILURE_PREDICTION_ENABLED = True
+FAILURE_RISK_RETRY_THRESHOLD = 0.60
+FAILURE_RISK_GROUND_THRESHOLD = 0.80
+
+# ── Chunk Clustering ──
+CHUNK_CLUSTERING_ENABLED = True
+CLUSTER_OVERLAP_THRESHOLD = 0.60
+
+# ── Adaptive Confidence ──
+ADAPTIVE_CONFIDENCE_ENABLED = True

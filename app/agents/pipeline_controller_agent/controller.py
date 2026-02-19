@@ -47,6 +47,10 @@ from app.rag.intent_classifier import classify_intent, IntentResult, QueryIntent
 from app.rag.query_rewriter import rewrite_query
 from app.rag.retrieval_validator import validate_retrieval
 from app.rag.subject_detector import detect_subject
+from app.rag.context_verifier import verify_context
+from app.rag.query_expander import rewrite_for_retry
+from app.core.config import CONTEXT_VERIFICATION_ENABLED, GROUNDED_MODE_THRESHOLD, FAILURE_PREDICTION_ENABLED
+from app.rag.failure_predictor import predict_failure
 
 
 class PipelineControllerAgent:
@@ -285,6 +289,7 @@ class PipelineControllerAgent:
                     self.retrieval_agent_input,
                     intent_result=intent_result,  # Pass intent for section-aware retrieval
                     subject_scope=search_scope,  # Pass potentially broadened scope
+                    query_type=query_type_result.query_type.value,  # Pass for dynamic weighting
                 )
             
             # FIX: Automatic Fallback for Subject Filtering
@@ -303,7 +308,8 @@ class PipelineControllerAgent:
                 self.retrieval_agent_output = await self.retriever_orchestrator.run(
                     self.retrieval_agent_input,
                     intent_result=intent_result,
-                    subject_scope=fallback_scope
+                    subject_scope=fallback_scope,
+                    query_type=query_type_result.query_type.value,
                 )
                 
                 # Update trace to indicate fallback happened
@@ -353,10 +359,9 @@ class PipelineControllerAgent:
             # strategy = "relax_query"
             
             try:
-                # Create a relaxed query or parameters
-                retry_query = rewritten_for_retrieval
-                if "detailed content" not in retry_query:
-                     retry_query += " detailed context"
+                # Use enhanced retry rewrites from query_expander
+                retry_rewrites = rewrite_for_retry(effective_query, attempt=attempt)
+                retry_query = retry_rewrites[0] if retry_rewrites else rewritten_for_retrieval + " detailed context"
                 
                 # Relax retrieval parameters (fetch more candidates)
                 relaxed_params = converted_params.model_copy()
@@ -377,7 +382,8 @@ class PipelineControllerAgent:
                 retry_output = await self.retriever_orchestrator.run(
                     retry_input, 
                     intent_result=intent_result,
-                    subject_scope=subject_scope
+                    subject_scope=subject_scope,
+                    query_type=query_type_result.query_type.value,
                 )
                 
                 retry_validation = validate_retrieval(
@@ -440,6 +446,75 @@ class PipelineControllerAgent:
             }
 
         # ======================
+        # 2.7 CONTEXT VERIFICATION (NEW)
+        # ======================
+        grounded_only = False
+        retrieval_confidence_score = 0.0
+
+        if CONTEXT_VERIFICATION_ENABLED and len(self.retrieval_agent_output.chunks) > 0:
+            context_verification = verify_context(
+                query=effective_query,
+                chunks=self.retrieval_agent_output.chunks,
+            )
+            trace["context_verification"] = {
+                "is_sufficient": context_verification.is_sufficient,
+                "coverage_score": context_verification.coverage_score,
+                "answer_signal": context_verification.answer_signal_score,
+                "has_contradictions": context_verification.has_contradictions,
+                "evidence_strength": context_verification.evidence_strength,
+                "recommendation": context_verification.recommendation,
+                "uncovered_concepts": context_verification.uncovered_concepts[:5],
+            }
+
+            # Extract retrieval confidence from orchestrator trace
+            ret_trace = self.retrieval_agent_output.retrieval_trace or {}
+            ret_confidence = ret_trace.get("retrieval_confidence", {})
+            retrieval_confidence_score = ret_confidence.get("score", 0.0)
+
+            # Determine grounded mode
+            if context_verification.recommendation == "grounded_only":
+                grounded_only = True
+                warnings.append("grounded_mode_context_verification")
+            elif retrieval_confidence_score < GROUNDED_MODE_THRESHOLD:
+                grounded_only = True
+                warnings.append("grounded_mode_low_confidence")
+
+            if grounded_only:
+                log_info(f"GROUNDED MODE activated: context_rec={context_verification.recommendation}, ret_confidence={retrieval_confidence_score:.3f}")
+
+        # ======================
+        # 2.8 FAILURE PREDICTION (Pre-Synthesis Guard)
+        # ======================
+        if FAILURE_PREDICTION_ENABLED and len(self.retrieval_agent_output.chunks) > 0:
+            try:
+                ctx_ver = context_verification if CONTEXT_VERIFICATION_ENABLED and len(self.retrieval_agent_output.chunks) > 0 else None
+                failure_prediction = predict_failure(
+                    chunks=self.retrieval_agent_output.chunks,
+                    query=effective_query,
+                    context_verification=ctx_ver,
+                )
+                trace["failure_prediction"] = {
+                    "risk_level": failure_prediction.risk_level,
+                    "should_retry": failure_prediction.should_retry,
+                    "should_expand": failure_prediction.should_expand,
+                    "should_ground": failure_prediction.should_ground,
+                    "signals": failure_prediction.signals,
+                    "explanation": failure_prediction.explanation,
+                }
+
+                # Act on failure prediction
+                if failure_prediction.should_ground and not grounded_only:
+                    grounded_only = True
+                    warnings.append("grounded_mode_failure_prediction")
+                    log_info(f"FAILURE PREDICTION: grounded mode activated (risk={failure_prediction.risk_level:.3f})")
+                elif failure_prediction.should_retry:
+                    log_info(f"FAILURE PREDICTION: retry recommended (risk={failure_prediction.risk_level:.3f}: {failure_prediction.explanation})")
+                    warnings.append(f"failure_prediction_retry_recommended")
+
+            except Exception as e:
+                log_info(f"Failure prediction skipped: {e}")
+
+        # ======================
         # 3. SYNTHESIS
         # ======================
         try:
@@ -452,7 +527,9 @@ class PipelineControllerAgent:
                 preferences=preferences,
                 model_name=model_name,
                 max_output_tokens=preferences.get("max_tokens", self.default_max_tokens),
-                retrieved_chunks=self.retrieval_agent_output.chunks
+                retrieved_chunks=self.retrieval_agent_output.chunks,
+                grounded_only=grounded_only,
+                retrieval_confidence=retrieval_confidence_score,
             )
             self.response_synthesizer_agent_output: SynthesisOutput = \
                 await self.response_synthesizer.run(self.response_synthesizer_agent_input)

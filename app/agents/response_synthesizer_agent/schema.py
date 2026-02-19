@@ -21,6 +21,8 @@ class SynthesisInput(BaseModel):
     max_output_tokens: Optional[int] = None
     model_name: Optional[str] = None
     allow_agentic: bool = False
+    grounded_only: bool = False
+    retrieval_confidence: float = 0.0
 
 
 class SynthesisOutput(BaseModel):

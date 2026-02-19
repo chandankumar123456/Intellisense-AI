@@ -6,7 +6,7 @@ from typing import List
 from langchain_groq import ChatGroq
 from app.agents.response_synthesizer_agent.schema import SynthesisInput, SynthesisOutput
 from app.agents.response_synthesizer_agent.utils import estimate_tokens, sentence_tokenize, clean_text, token_overlap
-from app.agents.response_synthesizer_agent.prompts import SYSTEM_PROMPT, INSTRUCTION_PROMPT
+from app.agents.response_synthesizer_agent.prompts import SYSTEM_PROMPT, INSTRUCTION_PROMPT, GROUNDED_SYSTEM_PROMPT
 from langchain.messages import HumanMessage, SystemMessage
 from app.core.logging import log_info, log_warning
 
@@ -45,6 +45,11 @@ class ResponseSynthesizer:
                 metrics={"latency_ms": int((time.time() - start_time) * 1000)},
             )
         
+        # ── Grounded mode detection ──
+        grounded_only = getattr(input, 'grounded_only', False)
+        if grounded_only:
+            log_info(f"Synthesizer in GROUNDED MODE for query: '{input.query}'", trace_id=input.trace_id)
+        
         log_info(f"Synthesizer received {len(input.retrieved_chunks)} chunks for query: '{input.query}'", trace_id=input.trace_id)
             
         included_chunks = self.select_chunks(
@@ -58,12 +63,13 @@ class ResponseSynthesizer:
         context_text = self.build_context(included_chunks)
         context_hash = hashlib.sha256(context_text.encode()).hexdigest()
         
-        # construct the prompt
+        # construct the prompt (use grounded mode if flagged)
         prompt = self.build_prompt(
             query = input.query,
             preferences = input.preferences,
             context = context_text,
-            history = input.conversation_history
+            history = input.conversation_history,
+            grounded_only = grounded_only
         )
         prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
         
@@ -95,7 +101,8 @@ class ResponseSynthesizer:
         # post processing
         processed_answer, used_chunk_ids, warnings = self.postprocess(
             raw_output,
-            included_chunks
+            included_chunks,
+            grounded_only=grounded_only
         )
         
         # if postprocess detected insufficient info
@@ -202,7 +209,7 @@ class ResponseSynthesizer:
     # ---------------------------------------------------------
     # PROMPT BUILDER
     # ---------------------------------------------------------
-    def build_prompt(self, query, preferences, context, history):
+    def build_prompt(self, query, preferences, context, history, grounded_only: bool = False):
         hist = history[-3:] if history else []
         hist_text = "\n".join(hist)
 
@@ -212,8 +219,11 @@ class ResponseSynthesizer:
             context_blocks=context,
         )
 
+        # Use grounded system prompt when retrieval confidence is low
+        system_prompt = GROUNDED_SYSTEM_PROMPT if grounded_only else SYSTEM_PROMPT
+
         full_prompt = (
-            SYSTEM_PROMPT
+            system_prompt
             + "\n"
             + instruction
             + "\nConversation History:\n"
@@ -263,7 +273,7 @@ class ResponseSynthesizer:
     # ---------------------------------------------------------
     # POSTPROCESSING / FACT CHECKING
     # ---------------------------------------------------------
-    def postprocess(self, raw_output: str, chunks: List):
+    def postprocess(self, raw_output: str, chunks: List, grounded_only: bool = False):
         warnings = []
         answer = clean_text(raw_output)
 
@@ -295,8 +305,9 @@ class ResponseSynthesizer:
                 # Keep the sentence even if not perfectly supported
                 supported_sentences.append(s)
 
-        # More lenient threshold: only return INSUFFICIENT_CONTEXT if >70% unsupported
-        if len(sentences) > 0 and unsupported_count / len(sentences) > 0.70:
+        # Stricter threshold in grounded mode (50%), normal threshold (70%)
+        threshold = 0.50 if grounded_only else 0.70
+        if len(sentences) > 0 and unsupported_count / len(sentences) > threshold:
             log_warning(f"Too many unsupported claims ({unsupported_count}/{len(sentences)})")
             return "INSUFFICIENT_CONTEXT", [], warnings
 
