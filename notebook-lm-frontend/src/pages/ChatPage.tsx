@@ -129,7 +129,7 @@ const ChatPage: React.FC = () => {
               aria-label="Scroll to bottom"
             >
               <ArrowDown className="w-4 h-4" />
-              <span className="text-xs font-medium z-content relative">New messages</span>
+              <span className="text-xs font-medium z-content relative">Back to bottom</span>
             </button>
           )}
         </div>

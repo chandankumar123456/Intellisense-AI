@@ -1,5 +1,5 @@
 import React from 'react';
-import { Globe, Plus, ExternalLink } from 'lucide-react';
+import { Globe, Plus } from 'lucide-react';
 
 const WebSourcesPage: React.FC = () => {
   return (
@@ -38,16 +38,6 @@ const WebSourcesPage: React.FC = () => {
               <Plus className="w-4 h-4 z-content relative" />
               <span className="z-content relative">Add Web Source</span>
             </button>
-            <a
-              href="https://docs.google.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-liquid flex items-center gap-2"
-              style={{ minHeight: '42px', padding: '0 20px' }}
-            >
-              <ExternalLink className="w-4 h-4 z-content relative" />
-              <span className="z-content relative">Learn More</span>
-            </a>
           </div>
         </div>
       </div>
