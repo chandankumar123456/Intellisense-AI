@@ -196,9 +196,20 @@ class PipelineControllerAgent:
         effective_query = intent_resolution.effective_query
         is_conceptual = intent_resolution.is_conceptual
 
-        # Build IntentResult for downstream compatibility
-        from app.rag.intent_classifier import classify_intent
-        intent_result = classify_intent(query)
+        # Build IntentResult from agent output for downstream compatibility
+        from app.rag.intent_classifier import IntentResult as _IntentResult
+        _intent_value = intent_resolution.intent
+        try:
+            _qi = QueryIntent(_intent_value)
+        except ValueError:
+            _qi = QueryIntent.AMBIGUOUS
+        intent_result = _IntentResult(
+            intent=_qi,
+            target_section=intent_resolution.target_section,
+            has_document_reference=intent_resolution.has_document_reference,
+            confidence=intent_resolution.intent_confidence,
+            explanation=intent_resolution.intent_explanation,
+        )
 
         # Build search scope for retrieval
         search_scope = SubjectScope(
@@ -431,11 +442,21 @@ class PipelineControllerAgent:
         # ======================
         # 6. FAILURE DETECTION (dedicated agent, pre-synthesis guard)
         # ======================
+        # Build a lightweight context verification proxy for the failure predictor
+        from app.rag.context_verifier import ContextVerification as _CtxVer
+        _ctx_for_failure = _CtxVer(
+            is_sufficient=best_validation.is_sufficient,
+            coverage_score=best_validation.coverage_score,
+            answer_signal_score=best_validation.answer_signal_score,
+            has_contradictions=best_validation.has_contradictions,
+            evidence_strength=best_validation.evidence_strength,
+        ) if best_validation.coverage_score > 0 else None
+
         failure_result = await self.failure_detector.run(
             FailureDetectionInput(
                 query=effective_query,
                 chunks=self.retrieval_agent_output.chunks,
-                context_verification=None,  # Already evaluated by context_validator
+                context_verification=_ctx_for_failure,
             )
         )
         warnings.extend(failure_result.warnings)

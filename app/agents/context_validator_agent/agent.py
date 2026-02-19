@@ -16,6 +16,7 @@ from app.rag.context_verifier import verify_context
 from app.rag.retrieval_validator import validate_retrieval
 from app.core.config import CONTEXT_VERIFICATION_ENABLED, GROUNDED_MODE_THRESHOLD
 from app.core.logging import log_info
+from typing import List
 
 
 class ContextValidatorAgent:
@@ -25,7 +26,7 @@ class ContextValidatorAgent:
     """
 
     async def run(self, input: ContextValidatorInput) -> ContextValidatorOutput:
-        warnings: list[str] = []
+        warnings: List[str] = []
         grounded_only = False
         grounded_reason = ""
 

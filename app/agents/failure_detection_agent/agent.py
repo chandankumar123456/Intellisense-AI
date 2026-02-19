@@ -15,6 +15,7 @@ from app.agents.failure_detection_agent.schema import (
 from app.rag.failure_predictor import predict_failure
 from app.core.config import FAILURE_PREDICTION_ENABLED
 from app.core.logging import log_info, log_error
+from typing import List
 
 
 class FailureDetectionAgent:
@@ -24,7 +25,7 @@ class FailureDetectionAgent:
     """
 
     async def run(self, input: FailureDetectionInput) -> FailureDetectionOutput:
-        warnings: list[str] = []
+        warnings: List[str] = []
 
         if not FAILURE_PREDICTION_ENABLED or len(input.chunks) == 0:
             return FailureDetectionOutput(

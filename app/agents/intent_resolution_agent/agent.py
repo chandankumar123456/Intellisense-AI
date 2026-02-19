@@ -16,6 +16,7 @@ from app.rag.query_rewriter import rewrite_query
 from app.rag.subject_detector import detect_subject, SubjectScope
 from app.rag.query_classifier import query_classifier, QueryType
 from app.core.logging import log_info
+from typing import List
 
 
 # Confidence threshold below which strict subject filtering is disabled
@@ -29,7 +30,7 @@ class IntentResolutionAgent:
     """
 
     async def run(self, input: IntentResolutionInput) -> IntentResolutionOutput:
-        warnings: list[str] = []
+        warnings: List[str] = []
 
         # ── 1. Intent classification (rule-based) ──
         intent_result = classify_intent(input.query)
