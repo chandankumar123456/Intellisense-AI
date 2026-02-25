@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useChat } from '../contexts/ChatContext';
 import ChatInput from '../components/chat/ChatInput';
 import ChatMessage from '../components/chat/ChatMessage';
 import { SourceTabBar, SourcePanel } from '../components/chat/SourceTabs';
-import { MessageSquare, Sparkles } from 'lucide-react';
+import { MessageSquare, Sparkles, ArrowDown } from 'lucide-react';
 
 const suggestions = [
   'Summarize my uploaded documents',
@@ -17,10 +17,26 @@ const ChatPage: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState('files');
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+
+  const scrollToBottom = useCallback(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, []);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollBtn(distanceFromBottom > 150);
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleTogglePanel = (tab: string) => {
     if (isPanelOpen && activeTab === tab) { setIsPanelOpen(false); return; }
@@ -49,9 +65,10 @@ const ChatPage: React.FC = () => {
         </div>
 
         {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 sm:p-5 scroll-smooth">
-          <div className="max-w-3xl mx-auto space-y-4 sm:space-y-5">
-            {messages.length === 0 ? (
+        <div className="flex-1 overflow-hidden relative">
+          <div ref={scrollRef} className="h-full overflow-y-auto p-3 sm:p-5 scroll-smooth">
+            <div className="max-w-3xl mx-auto space-y-4 sm:space-y-5">
+              {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full min-h-[300px] sm:min-h-[400px] gap-5 sm:gap-6 px-2">
                 {/* Liquid glass orb */}
                 <div
@@ -98,6 +115,23 @@ const ChatPage: React.FC = () => {
               </div>
             )}
           </div>
+          </div>
+
+          {/* Scroll to bottom button */}
+          {showScrollBtn && messages.length > 0 && (
+            <button
+              onClick={scrollToBottom}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 liquid-glass rounded-full transition-all duration-fast hover:scale-105 active:scale-95 flex items-center gap-1.5 px-3 py-2 z-10"
+              style={{
+                boxShadow: '0 4px 20px var(--glass-shadow-lg)',
+                color: 'var(--text-secondary)',
+              }}
+              aria-label="Scroll to bottom"
+            >
+              <ArrowDown className="w-4 h-4" />
+              <span className="text-xs font-medium z-content relative">Back to bottom</span>
+            </button>
+          )}
         </div>
 
         {/* Input — responsive bottom padding */}
