@@ -505,11 +505,6 @@
     box-shadow: 0 12px 40px var(--glass-shadow-lg), 0 0 30px var(--glass-shadow);
   }
 
-  .card:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px var(--focus-ring), 0 8px 32px var(--hover-glow);
-  }
-
   /* ── Chat Messages — responsive widths ──────── */
   .message-user {
     @apply rounded-glass rounded-br-md;
@@ -678,12 +673,6 @@
     min-height: 44px;
     border-radius: 10px;
     transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .nav-item:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px var(--focus-ring);
-    background: var(--hover-glow);
   }
 
   @media (min-width: 1024px) {

@@ -162,7 +162,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-1 z-content" role="navigation" aria-label="Main navigation">
+        <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-1 z-content" role="navigation">
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -170,7 +170,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
               <Link
                 key={item.path}
                 to={item.path}
-                title={item.label}
                 className={`nav-item relative group
                   ${isActive ? 'text-primary font-medium' : 'text-text_secondary hover:text-text_primary'}`}
                 style={isActive ? {

@@ -106,16 +106,6 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading = false 
           </button>
         </div>
       </div>
-      {message.length > 0 && (
-        <div className="flex items-center justify-between px-3 pb-1.5 z-content relative">
-          <span className="text-[11px] text-text_muted">
-            {!message.trim() ? '' : 'Press Enter to send, Shift+Enter for new line'}
-          </span>
-          <span className={`text-[11px] tabular-nums ${message.length > 4000 ? 'text-error' : 'text-text_muted'}`}>
-            {message.length.toLocaleString()} chars
-          </span>
-        </div>
-      )}
     </div>
   );
 };
