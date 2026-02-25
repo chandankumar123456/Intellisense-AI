@@ -26,6 +26,16 @@ from app.agents.verification_agent.schema import VerificationInput
 from app.agents.explanation_agent.agent import ExplanationAgent
 from app.agents.explanation_agent.schema import ExplanationInput
 
+# New specialized agents
+from app.agents.intent_resolution_agent.agent import IntentResolutionAgent
+from app.agents.intent_resolution_agent.schema import IntentResolutionInput
+from app.agents.context_validator_agent.agent import ContextValidatorAgent
+from app.agents.context_validator_agent.schema import ContextValidatorInput
+from app.agents.failure_detection_agent.agent import FailureDetectionAgent
+from app.agents.failure_detection_agent.schema import FailureDetectionInput
+from app.agents.coverage_analyzer_agent.agent import CoverageAnalyzerAgent
+from app.agents.coverage_analyzer_agent.schema import CoverageAnalysisInput
+
 
 from .controller_config import (
     DEFAULT_RETRIEVERS,
@@ -43,14 +53,9 @@ import datetime
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 from app.core.logging import log_info, log_error
-from app.rag.intent_classifier import classify_intent, IntentResult, QueryIntent
-from app.rag.query_rewriter import rewrite_query
-from app.rag.retrieval_validator import validate_retrieval
-from app.rag.subject_detector import detect_subject
-from app.rag.context_verifier import verify_context
+from app.rag.intent_classifier import IntentResult, QueryIntent
 from app.rag.query_expander import rewrite_for_retry
-from app.core.config import CONTEXT_VERIFICATION_ENABLED, GROUNDED_MODE_THRESHOLD, FAILURE_PREDICTION_ENABLED
-from app.rag.failure_predictor import predict_failure
+from app.rag.subject_detector import SubjectScope
 
 
 class PipelineControllerAgent:
@@ -61,7 +66,11 @@ class PipelineControllerAgent:
         response_synthesizer: ResponseSynthesizer,
         claim_extractor: ClaimExtractionAgent = None,
         verifier: VerificationAgent = None,
-        explainer: ExplanationAgent = None
+        explainer: ExplanationAgent = None,
+        intent_resolver: IntentResolutionAgent = None,
+        context_validator: ContextValidatorAgent = None,
+        failure_detector: FailureDetectionAgent = None,
+        coverage_analyzer: CoverageAnalyzerAgent = None,
     ):
         # Load .env file with encoding fallback
         try:
@@ -83,6 +92,12 @@ class PipelineControllerAgent:
         self.claim_extractor = claim_extractor
         self.verifier = verifier
         self.explainer = explainer
+
+        # New specialized agents (auto-create if not injected)
+        self.intent_resolver = intent_resolver or IntentResolutionAgent()
+        self.context_validator = context_validator or ContextValidatorAgent()
+        self.failure_detector = failure_detector or FailureDetectionAgent()
+        self.coverage_analyzer = coverage_analyzer or CoverageAnalyzerAgent()
 
         self.default_retrievers = DEFAULT_RETRIEVERS
         self.default_model = DEFAULT_MODEL_NAME
@@ -113,7 +128,7 @@ class PipelineControllerAgent:
         )
 
         # ======================
-        # 1. QUERY UNDERSTANDING
+        # 1. QUERY UNDERSTANDING (LLM-based)
         # ======================
         try:
             self.query_understanding_input = QueryUnderstandingInput(
@@ -168,107 +183,72 @@ class PipelineControllerAgent:
             }
 
         # ======================
-        # 1.5 INTENT CLASSIFICATION (rule-based, no LLM)
+        # 2. INTENT & SUBJECT RESOLUTION (dedicated agent)
         # ======================
-        intent_result = classify_intent(query)
-        log_info(
-            f"Intent classified: {intent_result.intent.value}, "
-            f"section={intent_result.target_section}, "
-            f"confidence={intent_result.confidence}"
+        intent_resolution = await self.intent_resolver.run(
+            IntentResolutionInput(
+                query=query,
+                llm_rewritten_query=self.query_understanding_output.rewritten_query,
+            )
+        )
+        warnings.extend(intent_resolution.warnings)
+
+        effective_query = intent_resolution.effective_query
+        is_conceptual = intent_resolution.is_conceptual
+
+        # Build IntentResult from agent output for downstream compatibility
+        from app.rag.intent_classifier import IntentResult as _IntentResult
+        _intent_value = intent_resolution.intent
+        try:
+            _qi = QueryIntent(_intent_value)
+        except ValueError:
+            _qi = QueryIntent.AMBIGUOUS
+        intent_result = _IntentResult(
+            intent=_qi,
+            target_section=intent_resolution.target_section,
+            has_document_reference=intent_resolution.has_document_reference,
+            confidence=intent_resolution.intent_confidence,
+            explanation=intent_resolution.intent_explanation,
+        )
+
+        # Build search scope for retrieval
+        search_scope = SubjectScope(
+            subject=intent_resolution.search_subject,
+            confidence=intent_resolution.subject_confidence,
+            is_ambiguous=intent_resolution.is_ambiguous,
+            content_type=intent_resolution.content_type,
+            secondary_subject=intent_resolution.secondary_subject,
+        )
+        subject_scope = SubjectScope(
+            subject=intent_resolution.subject,
+            confidence=intent_resolution.subject_confidence,
+            is_ambiguous=intent_resolution.is_ambiguous,
+            content_type=intent_resolution.content_type,
+            secondary_subject=intent_resolution.secondary_subject,
         )
 
         trace["intent_classification"] = {
-            "intent": intent_result.intent.value,
-            "target_section": intent_result.target_section,
-            "has_document_reference": intent_result.has_document_reference,
-            "confidence": intent_result.confidence,
-            "explanation": intent_result.explanation,
+            "intent": intent_resolution.intent,
+            "target_section": intent_resolution.target_section,
+            "has_document_reference": intent_resolution.has_document_reference,
+            "confidence": intent_resolution.intent_confidence,
+            "explanation": intent_resolution.intent_explanation,
         }
-
-        # ======================
-        # 1.6 QUERY REWRITING (deterministic, no LLM)
-        # ======================
-        rewritten_for_retrieval = rewrite_query(
-            raw_query=query,
-            intent_result=intent_result,
-        )
-        # Use intent-aware rewrite if the LLM rewrite is too short or generic
-        llm_rewrite = self.query_understanding_output.rewritten_query
-        if len(rewritten_for_retrieval.split()) > len(llm_rewrite.split()):
-            effective_query = rewritten_for_retrieval
-        else:
-            effective_query = llm_rewrite
-
-        log_info(f"Effective retrieval query: '{effective_query}'")
         trace["query_rewriting"] = {
-            "llm_rewrite": llm_rewrite,
-            "intent_rewrite": rewritten_for_retrieval,
+            "llm_rewrite": self.query_understanding_output.rewritten_query,
             "effective_query": effective_query,
         }
-
-        # ======================
-        # 1.7 SUBJECT SCOPE DETECTION (rule-based, no LLM)
-        # ======================
-        # Import SubjectScope for fallback creation
-        from app.rag.subject_detector import detect_subject, SubjectScope
-        subject_scope = detect_subject(query)
-        
-        # FIX: Confidence-Aware Subject Filtering
-        # If subject confidence is low, we disable strict filtering to avoid missing relevant docs.
-        SUBJECT_CONFIDENCE_THRESHOLD = 0.45
-        search_scope = subject_scope
-        
-        if subject_scope.subject and subject_scope.confidence < SUBJECT_CONFIDENCE_THRESHOLD:
-            log_info(f"Subject '{subject_scope.subject}' low confidence ({subject_scope.confidence:.2f} < {SUBJECT_CONFIDENCE_THRESHOLD}). Disabling strict filtering.")
-            search_scope = SubjectScope(
-                subject="", # Disable filtering
-                confidence=subject_scope.confidence,
-                is_ambiguous=True,
-                content_type=subject_scope.content_type,
-                secondary_subject=subject_scope.secondary_subject
-            )
-            warnings.append("low_conf_subject_filter_disabled")
-
-        log_info(
-            f"Subject scope: detected='{subject_scope.subject}', "
-            f"used='{search_scope.subject}', "
-            f"confidence={subject_scope.confidence:.2f}"
-        )
-        
         trace["subject_scope"] = subject_scope.model_dump()
-        if subject_scope.is_ambiguous:
-            warnings.append("ambiguous_subject_scope")
+        trace["query_structure"] = {
+            "query_type": intent_resolution.query_type,
+            "confidence": intent_resolution.query_type_confidence,
+            "is_conceptual": is_conceptual,
+        }
 
         # ======================
-        # 1.8 QUERY STRUCTURAL CLASSIFICATION (Advanced)
-        # ======================
-        # ======================
-        # 1.8 QUERY STRUCTURAL CLASSIFICATION (Advanced)
-        # ======================
-        from app.rag.query_classifier import query_classifier, QueryType
-        query_type_result = query_classifier.classify(query)
-        log_info(f"Query Structure: {query_type_result.query_type.value} (conf={query_type_result.confidence})")
-        trace["query_structure"] = query_type_result.model_dump()
-        
-        # FIX: Conceptual Query Handling
-        # If query is conceptual, we expand it with definition keywords to boost semantic matching of explanation paragraphs.
-        is_conceptual = False
-        if query_type_result.query_type == QueryType.CONCEPTUAL:
-            is_conceptual = True
-            # Appending definition anchors directly to the retrieval query
-            # This helps vector search find "definition of X" or "concept of X"
-            if "definition" not in effective_query.lower() and "concept" not in effective_query.lower():
-                effective_query += " definition concept principle architecture"
-                log_info(f"Conceptual query detected. Expanded query: '{effective_query}'")
-        
-        # Future: Use query_type to adjust retrieval strategy
-        # e.g. if query_type == QueryType.FACT_VERIFICATION -> enable_verification_agent = True
-        
-        # ======================
-        # 2. RETRIEVAL (section-aware + subject-scoped)
+        # 3. RETRIEVAL (section-aware + subject-scoped)
         # ======================
         try:
-            # 🔥 CRITICAL FIX: convert QueryUnderstanding RetrievalParams → RetrievalAgent RetrievalParams
             converted_params = RetrievalParams_RetrievalAgent(
                 **self.query_understanding_output.retrieval_params.model_dump()
             )
@@ -276,45 +256,42 @@ class PipelineControllerAgent:
             self.retrieval_agent_input = RetrievalInput(
                 user_id=user_id,
                 session_id=session_id,
-                rewritten_query=effective_query,  # Use intent-aware query (potentially expanded)
+                rewritten_query=effective_query,
                 retrievers_to_use=self.query_understanding_output.retrievers_to_use,
                 retrieval_params=converted_params,
                 conversation_history=conversation_history,
                 preferences=preferences,
-                is_conceptual=is_conceptual # Pass flag to orchestrator
+                is_conceptual=is_conceptual
             )
 
             self.retrieval_agent_output: RetrievalOutput = \
                 await self.retriever_orchestrator.run(
                     self.retrieval_agent_input,
-                    intent_result=intent_result,  # Pass intent for section-aware retrieval
-                    subject_scope=search_scope,  # Pass potentially broadened scope
-                    query_type=query_type_result.query_type.value,  # Pass for dynamic weighting
+                    intent_result=intent_result,
+                    subject_scope=search_scope,
+                    query_type=intent_resolution.query_type,
                 )
-            
-            # FIX: Automatic Fallback for Subject Filtering
-            # If we applied a subject filter and got ZERO results, strictly fallback to global search.
+
+            # Automatic fallback for subject filtering
             if search_scope.subject and len(self.retrieval_agent_output.chunks) == 0:
                 log_info("Subject-scoped retrieval returned 0 chunks. TRIGGERING FALLBACK: Global Search.")
                 warnings.append("subject_filter_fallback_triggered")
-                
+
                 fallback_scope = SubjectScope(
-                    subject="", 
+                    subject="",
                     is_ambiguous=True,
                     content_type=search_scope.content_type
                 )
-                
-                # Retry with global scope
+
                 self.retrieval_agent_output = await self.retriever_orchestrator.run(
                     self.retrieval_agent_input,
                     intent_result=intent_result,
                     subject_scope=fallback_scope,
-                    query_type=query_type_result.query_type.value,
+                    query_type=intent_resolution.query_type,
                 )
-                
-                # Update trace to indicate fallback happened
+
                 if self.retrieval_agent_output.retrieval_trace:
-                     self.retrieval_agent_output.retrieval_trace["fallback_triggered"] = True
+                    self.retrieval_agent_output.retrieval_trace["fallback_triggered"] = True
 
         except Exception as e:
             warnings.append(f"Retrieval failed: {e}")
@@ -325,45 +302,73 @@ class PipelineControllerAgent:
             )
 
         # ======================
-        # 2.5 POST-RETRIEVAL VALIDATION
+        # 3.5 KNOWLEDGE COVERAGE ANALYSIS (dedicated agent)
         # ======================
-        validation = validate_retrieval(
-            chunks=self.retrieval_agent_output.chunks,
-            intent_result=intent_result,
+        coverage_result = await self.coverage_analyzer.run(
+            CoverageAnalysisInput(
+                query=effective_query,
+                chunks=self.retrieval_agent_output.chunks,
+            )
         )
+        trace["coverage_analysis"] = {
+            "overall_coverage": coverage_result.overall_coverage,
+            "gaps": coverage_result.gaps[:5],
+            "needs_gap_fill": coverage_result.needs_gap_fill,
+        }
 
         # ======================
-        # 2.5 DYNAMIC RETRIEVAL LOOP (Agentic Orchestration)
+        # 4. CONTEXT VALIDATION (dedicated agent)
         # ======================
-        # We loop to improve retrieval quality if the initial attempt is weak.
-        # Strategies:
-        # 1. Initial attempt (Strict subject, standard params)
-        # 2. Query Relaxation (broader query, lower thresholds)
-        # 3. Parameter Expansion (higher top_k)
-        
+        ret_trace = self.retrieval_agent_output.retrieval_trace or {}
+        ret_confidence = ret_trace.get("retrieval_confidence", {})
+        retrieval_confidence_score = ret_confidence.get("score", 0.0)
+
+        ctx_validation = await self.context_validator.run(
+            ContextValidatorInput(
+                query=effective_query,
+                chunks=self.retrieval_agent_output.chunks,
+                intent_result=intent_result,
+                retrieval_confidence_score=retrieval_confidence_score,
+            )
+        )
+        warnings.extend(ctx_validation.warnings)
+
+        trace["retrieval_validation"] = {
+            "is_valid": ctx_validation.retrieval_is_valid,
+            "reason": ctx_validation.retrieval_reason,
+            "top_score": ctx_validation.retrieval_top_score,
+            "section_match_count": ctx_validation.retrieval_section_match_count,
+            "document_match_count": ctx_validation.retrieval_document_match_count,
+        }
+        trace["context_verification"] = {
+            "is_sufficient": ctx_validation.is_sufficient,
+            "coverage_score": ctx_validation.coverage_score,
+            "answer_signal": ctx_validation.answer_signal_score,
+            "has_contradictions": ctx_validation.has_contradictions,
+            "evidence_strength": ctx_validation.evidence_strength,
+            "recommendation": ctx_validation.recommendation,
+            "uncovered_concepts": ctx_validation.uncovered_concepts[:5],
+        }
+        trace["retrieval_trace"] = self.retrieval_agent_output.retrieval_trace
+
+        # ======================
+        # 4.5 DYNAMIC RETRIEVAL LOOP (Agentic Orchestration)
+        # ======================
         max_attempts = 3
         attempt = 1
-        best_output = self.retrieval_agent_output
-        best_validation = validation
-        
-        while attempt < max_attempts and not best_validation.is_valid and best_validation.should_retry:
+        best_validation = ctx_validation
+
+        while attempt < max_attempts and not best_validation.retrieval_is_valid and best_validation.retrieval_should_retry:
             if len(self.retrieval_agent_output.chunks) == 0:
-                # If we found NOTHING, a simple retry might not help unless we change the query significantly.
-                # For now, we break to avoid wasted cycles, unless we want to try a very broad fallback.
                 break
 
-            log_info(f"Retrieval attempt {attempt} failed validation: {best_validation.reason}. Starting attempt {attempt+1}...")
+            log_info(f"Retrieval attempt {attempt} failed validation: {best_validation.retrieval_reason}. Starting attempt {attempt+1}...")
             attempt += 1
-            
-            # Dynamic Strategy Selection based on failure reason
-            # strategy = "relax_query"
-            
+
             try:
-                # Use enhanced retry rewrites from query_expander
                 retry_rewrites = rewrite_for_retry(effective_query, attempt=attempt)
-                retry_query = retry_rewrites[0] if retry_rewrites else rewritten_for_retrieval + " detailed context"
-                
-                # Relax retrieval parameters (fetch more candidates)
+                retry_query = retry_rewrites[0] if retry_rewrites else effective_query + " detailed context"
+
                 relaxed_params = converted_params.model_copy()
                 relaxed_params.top_k_vector += 5
                 relaxed_params.top_k_keyword += 3
@@ -377,60 +382,49 @@ class PipelineControllerAgent:
                     conversation_history=conversation_history,
                     preferences=preferences
                 )
-                
-                # We reuse the same intent/subject for now, but in a more advanced version we could relax those too.
+
                 retry_output = await self.retriever_orchestrator.run(
-                    retry_input, 
+                    retry_input,
                     intent_result=intent_result,
                     subject_scope=subject_scope,
-                    query_type=query_type_result.query_type.value,
+                    query_type=intent_resolution.query_type,
                 )
-                
-                retry_validation = validate_retrieval(
-                    chunks=retry_output.chunks,
-                    intent_result=intent_result,
+
+                retry_ctx = await self.context_validator.run(
+                    ContextValidatorInput(
+                        query=retry_query,
+                        chunks=retry_output.chunks,
+                        intent_result=intent_result,
+                        retrieval_confidence_score=retrieval_confidence_score,
+                    )
                 )
-                
-                # Greedy selection: if it looks better, take it
-                if retry_validation.top_score > best_validation.top_score:
-                    log_info(f"Attempt {attempt} improved score: {best_validation.top_score:.3f} -> {retry_validation.top_score:.3f}")
+
+                if retry_ctx.retrieval_top_score > best_validation.retrieval_top_score:
+                    log_info(f"Attempt {attempt} improved score: {best_validation.retrieval_top_score:.3f} -> {retry_ctx.retrieval_top_score:.3f}")
                     self.retrieval_agent_output = retry_output
-                    best_validation = retry_validation
-                    converted_params = relaxed_params # Update params for trace if needed
+                    best_validation = retry_ctx
+                    converted_params = relaxed_params
                 else:
-                    log_info(f"Attempt {attempt} did not improve score ({retry_validation.top_score:.3f} vs {best_validation.top_score:.3f}).")
-            
+                    log_info(f"Attempt {attempt} did not improve score ({retry_ctx.retrieval_top_score:.3f} vs {best_validation.retrieval_top_score:.3f}).")
+
             except Exception as e:
                 warnings.append(f"Retrieval attempt {attempt} error: {e}")
                 log_error(f"Retrieval loop error: {e}")
                 break
 
-        validation = best_validation # Ensure final validation is the best one
-
-
-        trace["retrieval_validation"] = {
-            "is_valid": validation.is_valid,
-            "reason": validation.reason,
-            "top_score": validation.top_score,
-            "section_match_count": validation.section_match_count,
-            "document_match_count": validation.document_match_count,
-        }
-
-        trace["retrieval_trace"] = self.retrieval_agent_output.retrieval_trace
+        grounded_only = best_validation.grounded_only
 
         # ======================
-        # 2.6 EARLY NO-KNOWLEDGE EXIT
+        # 5. EARLY NO-KNOWLEDGE EXIT
         # ======================
-        # If retrieval found nothing relevant, skip synthesis entirely
-        # to avoid slow LLM calls that will just produce an error.
         has_no_chunks = len(self.retrieval_agent_output.chunks) == 0
-        has_low_relevance = validation.top_score < NO_KNOWLEDGE_SCORE_THRESHOLD
+        has_low_relevance = best_validation.retrieval_top_score < NO_KNOWLEDGE_SCORE_THRESHOLD
 
         if has_no_chunks or has_low_relevance:
             latency_ms = int((time.time() - start_time) * 1000)
             log_info(
                 f"No-knowledge fast path: chunks={len(self.retrieval_agent_output.chunks)}, "
-                f"top_score={validation.top_score:.3f}, latency={latency_ms}ms"
+                f"top_score={best_validation.retrieval_top_score:.3f}, latency={latency_ms}ms"
             )
             return {
                 "answer": FALLBACK_NO_KNOWLEDGE,
@@ -446,76 +440,41 @@ class PipelineControllerAgent:
             }
 
         # ======================
-        # 2.7 CONTEXT VERIFICATION (NEW)
+        # 6. FAILURE DETECTION (dedicated agent, pre-synthesis guard)
         # ======================
-        grounded_only = False
-        retrieval_confidence_score = 0.0
+        # Build a lightweight context verification proxy for the failure predictor
+        from app.rag.context_verifier import ContextVerification as _CtxVer
+        _ctx_for_failure = _CtxVer(
+            is_sufficient=best_validation.is_sufficient,
+            coverage_score=best_validation.coverage_score,
+            answer_signal_score=best_validation.answer_signal_score,
+            has_contradictions=best_validation.has_contradictions,
+            evidence_strength=best_validation.evidence_strength,
+        ) if best_validation.coverage_score > 0 else None
 
-        if CONTEXT_VERIFICATION_ENABLED and len(self.retrieval_agent_output.chunks) > 0:
-            context_verification = verify_context(
+        failure_result = await self.failure_detector.run(
+            FailureDetectionInput(
                 query=effective_query,
                 chunks=self.retrieval_agent_output.chunks,
+                context_verification=_ctx_for_failure,
             )
-            trace["context_verification"] = {
-                "is_sufficient": context_verification.is_sufficient,
-                "coverage_score": context_verification.coverage_score,
-                "answer_signal": context_verification.answer_signal_score,
-                "has_contradictions": context_verification.has_contradictions,
-                "evidence_strength": context_verification.evidence_strength,
-                "recommendation": context_verification.recommendation,
-                "uncovered_concepts": context_verification.uncovered_concepts[:5],
-            }
+        )
+        warnings.extend(failure_result.warnings)
 
-            # Extract retrieval confidence from orchestrator trace
-            ret_trace = self.retrieval_agent_output.retrieval_trace or {}
-            ret_confidence = ret_trace.get("retrieval_confidence", {})
-            retrieval_confidence_score = ret_confidence.get("score", 0.0)
+        trace["failure_prediction"] = {
+            "risk_level": failure_result.risk_level,
+            "should_retry": failure_result.should_retry,
+            "should_expand": failure_result.should_expand,
+            "should_ground": failure_result.should_ground,
+            "signals": failure_result.signals,
+            "explanation": failure_result.explanation,
+        }
 
-            # Determine grounded mode
-            if context_verification.recommendation == "grounded_only":
-                grounded_only = True
-                warnings.append("grounded_mode_context_verification")
-            elif retrieval_confidence_score < GROUNDED_MODE_THRESHOLD:
-                grounded_only = True
-                warnings.append("grounded_mode_low_confidence")
-
-            if grounded_only:
-                log_info(f"GROUNDED MODE activated: context_rec={context_verification.recommendation}, ret_confidence={retrieval_confidence_score:.3f}")
+        if failure_result.should_ground and not grounded_only:
+            grounded_only = True
 
         # ======================
-        # 2.8 FAILURE PREDICTION (Pre-Synthesis Guard)
-        # ======================
-        if FAILURE_PREDICTION_ENABLED and len(self.retrieval_agent_output.chunks) > 0:
-            try:
-                ctx_ver = context_verification if CONTEXT_VERIFICATION_ENABLED and len(self.retrieval_agent_output.chunks) > 0 else None
-                failure_prediction = predict_failure(
-                    chunks=self.retrieval_agent_output.chunks,
-                    query=effective_query,
-                    context_verification=ctx_ver,
-                )
-                trace["failure_prediction"] = {
-                    "risk_level": failure_prediction.risk_level,
-                    "should_retry": failure_prediction.should_retry,
-                    "should_expand": failure_prediction.should_expand,
-                    "should_ground": failure_prediction.should_ground,
-                    "signals": failure_prediction.signals,
-                    "explanation": failure_prediction.explanation,
-                }
-
-                # Act on failure prediction
-                if failure_prediction.should_ground and not grounded_only:
-                    grounded_only = True
-                    warnings.append("grounded_mode_failure_prediction")
-                    log_info(f"FAILURE PREDICTION: grounded mode activated (risk={failure_prediction.risk_level:.3f})")
-                elif failure_prediction.should_retry:
-                    log_info(f"FAILURE PREDICTION: retry recommended (risk={failure_prediction.risk_level:.3f}: {failure_prediction.explanation})")
-                    warnings.append(f"failure_prediction_retry_recommended")
-
-            except Exception as e:
-                log_info(f"Failure prediction skipped: {e}")
-
-        # ======================
-        # 3. SYNTHESIS
+        # 7. SYNTHESIS
         # ======================
         try:
             self.response_synthesizer_agent_input = SynthesisInput(

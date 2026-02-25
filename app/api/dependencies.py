@@ -16,6 +16,12 @@ from app.agents.claim_extraction_agent.agent import ClaimExtractionAgent
 from app.agents.verification_agent.agent import VerificationAgent
 from app.agents.explanation_agent.agent import ExplanationAgent
 
+# New specialized agents
+from app.agents.intent_resolution_agent.agent import IntentResolutionAgent
+from app.agents.context_validator_agent.agent import ContextValidatorAgent
+from app.agents.failure_detection_agent.agent import FailureDetectionAgent
+from app.agents.coverage_analyzer_agent.agent import CoverageAnalyzerAgent
+
 
 pipeline_controller: PipelineControllerAgent = None
 
@@ -69,13 +75,23 @@ def get_pipeline_controller() -> PipelineControllerAgent:
         verifier = VerificationAgent(llm_client)
         explainer = ExplanationAgent(llm_client)
 
+        # Initialize new specialized agents
+        intent_resolver = IntentResolutionAgent()
+        context_validator = ContextValidatorAgent()
+        failure_detector = FailureDetectionAgent()
+        coverage_analyzer = CoverageAnalyzerAgent()
+
         pipeline_controller = PipelineControllerAgent(
             query_understander=q_agent,
             retriever_orchestrator=retrieval_agent,
             response_synthesizer=res_agent,
             claim_extractor=claim_extractor,
             verifier=verifier,
-            explainer=explainer
+            explainer=explainer,
+            intent_resolver=intent_resolver,
+            context_validator=context_validator,
+            failure_detector=failure_detector,
+            coverage_analyzer=coverage_analyzer,
         )
 
     return pipeline_controller
