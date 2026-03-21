@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, User, ChevronRight, Sun, Moon } from 'lucide-react';
 
 interface HeaderProps {
@@ -9,43 +9,53 @@ interface HeaderProps {
   onToggleSidebar?: () => void;
 }
 
+const pageLabels: Record<string, string> = {
+  '/app/home': 'Home',
+  '/app/chat': 'Chat',
+  '/app/history': 'History',
+  '/app/web': 'Web Sources',
+  '/app/youtube': 'YouTube',
+  '/app/knowledge': 'My Knowledge',
+  '/app/verification': 'Verification',
+  '/app/admin': 'Admin',
+  '/app/settings': 'Settings',
+};
+
 const Header: React.FC<HeaderProps> = ({ isCollapsed = false, onToggleSidebar }) => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => { logout(); navigate('/login'); };
+  const pageLabel = pageLabels[location.pathname] ?? 'IntelliSense AI';
 
   return (
     <header
-      className="liquid-glass-header flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20"
-      style={{ minHeight: '56px', height: 'auto' }}
+      className="liquid-glass-header flex items-center justify-between px-4 sm:px-5"
+      style={{ height: '52px' }}
     >
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+      <div className="flex items-center gap-2 min-w-0">
         {isCollapsed && onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
-            className="hidden lg:flex items-center justify-center rounded-glass-sm transition-all duration-fast touch-target"
-            style={{
-              width: '36px', height: '36px',
-              color: 'var(--text-muted)',
-              background: 'transparent',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover-glow)'; e.currentTarget.style.color = 'var(--accent-primary)'; }}
+            className="hidden lg:flex items-center justify-center rounded-glass-sm transition-all duration-fast"
+            style={{ width: '32px', height: '32px', color: 'var(--text-muted)', background: 'transparent' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover-glow)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
             aria-label="Open navigation sidebar"
             title="Open Sidebar (Ctrl+B)"
           >
-            <ChevronRight className="w-4.5 h-4.5" />
+            <ChevronRight className="w-4 h-4" />
           </button>
         )}
-        <h1 className="text-xs sm:text-sm font-semibold text-text_muted tracking-wide uppercase truncate">
-          IntelliSense AI
-        </h1>
+        <span className="text-sm font-semibold text-text_primary tracking-tight truncate">
+          {pageLabel}
+        </span>
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-        {/* Liquid Glass Theme Toggle */}
+        {/* Theme toggle */}
         <button
           onClick={toggleTheme}
           className={`theme-toggle ${theme}`}
@@ -53,45 +63,36 @@ const Header: React.FC<HeaderProps> = ({ isCollapsed = false, onToggleSidebar })
           title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
         >
           <Sun
-            className="absolute left-[7px] w-3.5 h-3.5 transition-all duration-normal"
-            style={{
-              color: theme === 'light' ? 'var(--text-inverse)' : 'var(--text-muted)',
-              opacity: theme === 'light' ? 1 : 0.5,
-            }}
+            className="absolute left-[6px] w-3 h-3 transition-all duration-normal"
+            style={{ color: theme === 'light' ? 'var(--text-inverse)' : 'var(--text-muted)', opacity: theme === 'light' ? 1 : 0.4 }}
           />
           <Moon
-            className="absolute right-[7px] w-3.5 h-3.5 transition-all duration-normal"
-            style={{
-              color: theme === 'dark' ? 'var(--text-inverse)' : 'var(--text-muted)',
-              opacity: theme === 'dark' ? 1 : 0.5,
-            }}
+            className="absolute right-[6px] w-3 h-3 transition-all duration-normal"
+            style={{ color: theme === 'dark' ? 'var(--text-inverse)' : 'var(--text-muted)', opacity: theme === 'dark' ? 1 : 0.4 }}
           />
         </button>
 
         {user && (
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <div className="flex items-center gap-1.5">
               <div
-                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                style={{
-                  background: 'var(--hover-glow)',
-                  border: '1px solid var(--glass-edge)',
-                }}
+                className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ background: 'var(--glass-elevated)', border: '1px solid var(--border-subtle)' }}
               >
-                <User className="w-4 h-4 text-primary" />
+                <User className="w-3.5 h-3.5 text-text_secondary" />
               </div>
-              <span className="text-sm text-text_secondary hidden md:inline truncate max-w-[120px]">
+              <span className="text-xs text-text_secondary hidden md:inline truncate max-w-[100px]">
                 {user.username}
               </span>
             </div>
             <button
               onClick={handleLogout}
-              className="btn-liquid flex items-center gap-2 px-4 py-1.5 text-xs sm:text-sm"
-              style={{ minHeight: '36px' }}
+              className="btn-liquid flex items-center gap-1.5 text-xs"
+              style={{ minHeight: '32px', padding: '4px 12px' }}
               aria-label="Logout"
             >
-              <LogOut className="w-4 h-4 flex-shrink-0" />
-              <span className="hidden sm:inline z-content">Logout</span>
+              <LogOut className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         )}

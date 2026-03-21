@@ -16,7 +16,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading = false 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 160) + 'px';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 140) + 'px';
     }
   }, [message]);
 
@@ -43,19 +43,21 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading = false 
   };
 
   const hasSR = typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
+  const canSend = message.trim() && !isLoading;
 
   return (
     <div
-      className="liquid-glass rounded-glass-lg transition-all duration-normal"
+      className="rounded-glass-lg transition-all duration-normal"
       style={{
-        padding: '6px',
+        background: 'var(--glass-elevated)',
+        border: `1px solid ${isFocused ? 'var(--accent-primary)' : 'var(--border-subtle)'}`,
         boxShadow: isFocused
-          ? '0 0 0 3px var(--focus-ring), 0 8px 32px var(--hover-glow)'
-          : '0 4px 16px var(--glass-shadow), inset 0 2px 4px rgba(0,0,0,0.02)',
-        transform: isFocused ? 'scale(1.003)' : 'scale(1)',
+          ? '0 0 0 2px var(--focus-ring), 0 2px 8px var(--glass-shadow)'
+          : '0 1px 3px var(--glass-shadow)',
+        padding: '4px',
       }}
     >
-      <div className="flex items-end gap-2 z-content relative" style={{ minHeight: '44px' }}>
+      <div className="flex items-end gap-1.5" style={{ minHeight: '40px' }}>
         <textarea
           ref={textareaRef}
           value={message}
@@ -64,45 +66,43 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading = false 
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           placeholder="Ask anything about your documents..."
-          className="flex-1 bg-transparent border-none outline-none resize-none text-text_primary placeholder-text_muted py-3 px-3 sm:px-4 max-h-40 leading-relaxed"
-          style={{ fontSize: '14px', minHeight: '44px' }}
+          className="flex-1 bg-transparent border-none outline-none resize-none text-text_primary placeholder-text_muted py-2.5 px-3 max-h-36 leading-relaxed"
+          style={{ fontSize: '14px', minHeight: '40px' }}
           rows={1}
           disabled={isLoading}
           aria-label="Chat message input"
         />
-        <div className="flex items-center gap-1.5 pb-1.5 pr-1 flex-shrink-0">
+        <div className="flex items-center gap-1 pb-1 pr-1 flex-shrink-0">
           {hasSR && (
             <button
               onClick={toggleVoice}
-              className="rounded-full transition-all duration-fast active:scale-[0.88] flex items-center justify-center"
+              className="rounded-glass-sm transition-all duration-fast active:scale-[0.90] flex items-center justify-center"
               style={{
-                width: '40px', height: '40px',
+                width: '36px', height: '36px',
                 background: isListening ? 'var(--active-glow)' : 'transparent',
-                color: isListening ? 'var(--accent-secondary)' : 'var(--text-muted)',
+                color: isListening ? 'var(--text-primary)' : 'var(--text-muted)',
               }}
-              onMouseEnter={(e) => { if (!isListening) e.currentTarget.style.background = 'var(--hover-glow)'; }}
-              onMouseLeave={(e) => { if (!isListening) e.currentTarget.style.background = 'transparent'; }}
+              onMouseEnter={(e) => { if (!isListening) e.currentTarget.style.color = 'var(--text-secondary)'; }}
+              onMouseLeave={(e) => { if (!isListening) e.currentTarget.style.color = 'var(--text-muted)'; }}
               aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
             >
-              {isListening ? <MicOff className="w-[18px] h-[18px]" /> : <Mic className="w-[18px] h-[18px]" />}
+              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
           )}
           <button
             onClick={handleSubmit}
-            disabled={!message.trim() || isLoading}
-            className="rounded-glass-sm transition-all duration-fast active:scale-[0.88] flex items-center justify-center"
+            disabled={!canSend}
+            className="rounded-glass-sm transition-all duration-fast active:scale-[0.90] flex items-center justify-center"
             style={{
-              width: '40px', height: '40px',
-              background: message.trim()
-                ? 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))'
-                : 'var(--hover-glow)',
-              color: message.trim() ? '#FFFFFF' : 'var(--text-muted)',
-              boxShadow: message.trim() ? '0 4px 16px var(--hover-glow)' : 'none',
-              opacity: (!message.trim() || isLoading) ? 0.6 : 1,
+              width: '36px', height: '36px',
+              background: canSend ? 'var(--accent-primary)' : 'transparent',
+              color: canSend ? 'var(--text-inverse)' : 'var(--text-muted)',
+              opacity: (!message.trim() || isLoading) ? 0.5 : 1,
+              border: canSend ? 'none' : '1px solid var(--border-subtle)',
             }}
             aria-label="Send message"
           >
-            <Send className="w-[18px] h-[18px]" />
+            <Send className="w-4 h-4" />
           </button>
         </div>
       </div>
