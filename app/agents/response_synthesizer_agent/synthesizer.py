@@ -94,7 +94,7 @@ class ResponseSynthesizer:
                 trace_id=input.trace_id,
                 confidence=0.0,
                 sections=None,
-                warnings=["insufficinet_context"],
+                warnings=["insufficient_context"],
                 raw_model_output=raw_output,
                 reasoning=None,
                 metrics = token_usage
