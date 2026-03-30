@@ -544,6 +544,7 @@ class PipelineControllerAgent:
                 used_chunk_ids=[],
                 trace_id=self.retrieval_agent_output.trace_id,
                 confidence=0.0,
+                sections=None,
                 warnings=[str(e)],
                 raw_model_output=None,
                 reasoning=None,
@@ -571,6 +572,7 @@ class PipelineControllerAgent:
             "latency_ms": latency_ms,
             "raw_model_output": self.response_synthesizer_agent_output.raw_model_output,
             "metrics": self.response_synthesizer_agent_output.metrics,
+            "sections": self.response_synthesizer_agent_output.sections,
         }
 
         return final_payload
@@ -661,4 +663,3 @@ class PipelineControllerAgent:
             "detailed_report": detailed_report,
             "latency_ms": latency_ms
         }
-

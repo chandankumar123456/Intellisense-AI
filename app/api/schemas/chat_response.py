@@ -1,6 +1,6 @@
 # app/api/schemas/chat_response.py
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 class ChatResponse(BaseModel):
     answer: str
@@ -14,4 +14,4 @@ class ChatResponse(BaseModel):
     latency_ms: int
     raw_model_output: Optional[str] = None
     metrics: dict
-
+    sections: Optional[List[Dict[str, str]]] = None
