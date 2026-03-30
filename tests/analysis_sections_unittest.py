@@ -2,9 +2,8 @@ import asyncio
 import pathlib
 import sys
 import unittest
-from types import SimpleNamespace
+from types import SimpleNamespace, ModuleType
 from unittest.mock import patch
-import types
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -13,7 +12,7 @@ if str(REPO_ROOT) not in sys.path:
 
 
 if "pydantic" not in sys.modules:
-    pydantic_stub = types.ModuleType("pydantic")
+    pydantic_stub = ModuleType("pydantic")
 
     class _BaseModel:
         def __init__(self, **kwargs):
@@ -33,7 +32,7 @@ if "pydantic" not in sys.modules:
 
 
 if "langchain_groq" not in sys.modules:
-    langchain_groq_stub = types.ModuleType("langchain_groq")
+    langchain_groq_stub = ModuleType("langchain_groq")
 
     class _DummyChatGroq:
         def __init__(self, *args, **kwargs):
@@ -46,8 +45,8 @@ if "langchain_groq" not in sys.modules:
     sys.modules["langchain_groq"] = langchain_groq_stub
 
 if "langchain.messages" not in sys.modules:
-    langchain_stub = types.ModuleType("langchain")
-    messages_stub = types.ModuleType("langchain.messages")
+    langchain_stub = ModuleType("langchain")
+    messages_stub = ModuleType("langchain.messages")
 
     class _Msg:
         def __init__(self, content):
@@ -90,6 +89,13 @@ def _required_headings():
 
 
 class ResponseSynthesizerSectionTests(unittest.TestCase):
+    def test_extract_13_sections_empty_text_still_returns_structure(self):
+        synthesizer = _make_synthesizer()
+        sections = synthesizer.extract_13_sections("")
+
+        self.assertEqual(len(sections), 13)
+        self.assertTrue(all(s["content"] == "" for s in sections))
+
     def test_extract_13_sections_all_present(self):
         synthesizer = _make_synthesizer()
         required = _required_headings()

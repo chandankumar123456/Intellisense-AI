@@ -362,9 +362,6 @@ class ResponseSynthesizer:
         Parse required markdown sections from final answer text.
         Expected heading format: ## SECTION NAME
         """
-        if not answer_text:
-            return []
-
         headings = [
             "SYSTEM OVERVIEW",
             "END-TO-END FLOW",
@@ -380,6 +377,9 @@ class ResponseSynthesizer:
             "PROJECT STRUCTURE",
             "FINAL CRITICAL ANALYSIS",
         ]
+
+        if not answer_text:
+            return [{"name": h, "content": ""} for h in headings]
 
         sections: List[Dict[str, str]] = []
         for idx, heading in enumerate(headings):
