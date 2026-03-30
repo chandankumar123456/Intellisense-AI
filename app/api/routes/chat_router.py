@@ -89,6 +89,7 @@ async def chat_query(
             latency_ms=response.get("latency_ms"),
             raw_model_output=response.get("raw_model_output"),
             metrics=response.get("metrics"),
+            sections=response.get("sections"),
             citations = []
         )
         
@@ -117,5 +118,6 @@ async def chat_query(
             latency_ms=0,
             raw_model_output=None,
             metrics={},
+            sections=None,
             citations=[]
         )

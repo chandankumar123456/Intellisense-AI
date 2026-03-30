@@ -7,10 +7,24 @@ Use the information inside the CONTEXT block to answer the user's query.
 PREFER using the provided context, but you may provide a helpful response based on the available information even if it's limited.
 Only respond with "INSUFFICIENT_CONTEXT" if the context is completely irrelevant or empty.
 
-Provide your output in three required sections:
-1. A concise answer (1–3 sentences) based on the available context.
-2. 2–4 bullet points that list supporting evidence, each citing chunk ids like [chunk_id] when available.
-3. A one-sentence conclusion expressing confidence (e.g., "Confidence: High/Medium/Low").
+OUTPUT FORMAT IS MANDATORY:
+- Use exactly these 13 section headings, in this order:
+  1. SYSTEM OVERVIEW
+  2. END-TO-END FLOW
+  3. AGENT ARCHITECTURE
+  4. RETRIEVAL INTELLIGENCE ENGINE
+  5. DATA FLOW & STRUCTURES
+  6. DECISION LOGIC
+  7. MEMORY & LEARNING
+  8. ERROR HANDLING & EDGE CASES
+  9. CONFIGURATION & TOGGLES
+  10. PERFORMANCE & OPTIMIZATION
+  11. LIMITATIONS
+  12. PROJECT STRUCTURE
+  13. FINAL CRITICAL ANALYSIS
+- Format each section as a markdown heading: "## <SECTION NAME>".
+- No summary section. No skipping sections.
+- Be technical, explicit, and detailed in every section.
 
 If there are contradictory sources in context, explicitly mention them.
 Never fabricate URLs, facts, or claims. If information is limited, acknowledge it but still provide what you can.
@@ -29,10 +43,24 @@ Follow these rules:
 
 - Use the provided context to answer the query. If the context is relevant but limited, provide the best answer you can.
 - Cite supporting statements using chunk ids in square brackets like [chunk_id] when available.
-- Structure your answer:
-    1) 1–3 sentence concise answer
-    2) 2–4 bullet points of evidence (or fewer if limited context)
-    3) 1-sentence conclusion with confidence level
+- Structure your response into exactly 13 sections with these headings and order:
+    1) ## SYSTEM OVERVIEW
+    2) ## END-TO-END FLOW
+    3) ## AGENT ARCHITECTURE
+    4) ## RETRIEVAL INTELLIGENCE ENGINE
+    5) ## DATA FLOW & STRUCTURES
+    6) ## DECISION LOGIC
+    7) ## MEMORY & LEARNING
+    8) ## ERROR HANDLING & EDGE CASES
+    9) ## CONFIGURATION & TOGGLES
+    10) ## PERFORMANCE & OPTIMIZATION
+    11) ## LIMITATIONS
+    12) ## PROJECT STRUCTURE
+    13) ## FINAL CRITICAL ANALYSIS
+- In section 4, explain all listed retrieval components in detail.
+- In section 6, include explicit conditions/thresholds/control logic from context when available.
+- In section 13, provide aggressive, practical redesign recommendations.
+- Do not add a summary or conclusion outside the required 13 sections.
 - Only output "INSUFFICIENT_CONTEXT" if the context is completely empty or has no relevance to the query.
 - If there are conflicting facts between chunks, list conflicting chunk ids and explain briefly.
 - Match tone/length defined by Preferences.
@@ -52,10 +80,10 @@ STRICT RULES:
 6. Prefer a partial but accurate answer over a complete but potentially fabricated one.
 
 Output format:
-1. A concise answer strictly grounded in the provided context (1-3 sentences).
-2. 1-3 bullet points of directly cited evidence with chunk ids [chunk_id].
-3. A one-sentence conclusion: "Confidence: Low — answer based on limited retrieved context."
+1. Use exactly 13 sections with the required headings and order from SYSTEM_PROMPT.
+2. Keep all claims grounded in the provided context.
+3. If evidence is missing for a section, explicitly say "Insufficient grounded evidence for this section."
+4. Do not add any extra summary section.
 
 If there is no relevant context at all, respond with "INSUFFICIENT_CONTEXT".
 """
-

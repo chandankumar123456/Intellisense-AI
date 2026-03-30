@@ -30,6 +30,7 @@ class SynthesisOutput(BaseModel):
     used_chunk_ids: List[str]
     trace_id: str
     confidence: float
+    sections: Optional[List[Dict[str, str]]] = None
 
     warnings: List[str] = []
     raw_model_output: Optional[str] = None

@@ -2,7 +2,7 @@
 import time
 import hashlib
 import re
-from typing import List
+from typing import List, Dict
 from langchain_groq import ChatGroq
 from app.agents.response_synthesizer_agent.schema import SynthesisInput, SynthesisOutput
 from app.agents.response_synthesizer_agent.utils import estimate_tokens, sentence_tokenize, clean_text, token_overlap
@@ -39,6 +39,7 @@ class ResponseSynthesizer:
                 used_chunk_ids=[],
                 trace_id=input.trace_id,
                 confidence=0.0,
+                sections=None,
                 warnings=["no_retrieved_chunks"],
                 raw_model_output=None,
                 reasoning=None,
@@ -92,6 +93,7 @@ class ResponseSynthesizer:
                 used_chunk_ids=[],
                 trace_id=input.trace_id,
                 confidence=0.0,
+                sections=None,
                 warnings=["insufficinet_context"],
                 raw_model_output=raw_output,
                 reasoning=None,
@@ -117,6 +119,7 @@ class ResponseSynthesizer:
                 used_chunk_ids=[],
                 trace_id=input.trace_id,
                 confidence=0.0,
+                sections=None,
                 warnings=warnings,
                 raw_model_output=raw_output,
                 reasoning=None,
@@ -124,6 +127,7 @@ class ResponseSynthesizer:
             )
         
         confidence = self.compute_confidence(used_chunk_ids, included_chunks, warnings)
+        sections = self.extract_13_sections(processed_answer)
         
         # return final output
         latency_ms = int((time.time() - start_time) * 1000)
@@ -133,6 +137,7 @@ class ResponseSynthesizer:
             used_chunk_ids=used_chunk_ids,
             trace_id=input.trace_id,
             confidence=confidence,
+            sections=sections,
             warnings=warnings,
             raw_model_output=raw_output,
             reasoning=None,
@@ -351,4 +356,49 @@ class ResponseSynthesizer:
             base -= 0.05
 
         return max(0.0, min(1.0, base))
+
+    def extract_13_sections(self, answer_text: str) -> List[Dict[str, str]]:
+        """
+        Parse required markdown sections from final answer text.
+        Expected heading format: ## SECTION NAME
+        """
+        if not answer_text:
+            return []
+
+        headings = [
+            "SYSTEM OVERVIEW",
+            "END-TO-END FLOW",
+            "AGENT ARCHITECTURE",
+            "RETRIEVAL INTELLIGENCE ENGINE",
+            "DATA FLOW & STRUCTURES",
+            "DECISION LOGIC",
+            "MEMORY & LEARNING",
+            "ERROR HANDLING & EDGE CASES",
+            "CONFIGURATION & TOGGLES",
+            "PERFORMANCE & OPTIMIZATION",
+            "LIMITATIONS",
+            "PROJECT STRUCTURE",
+            "FINAL CRITICAL ANALYSIS",
+        ]
+
+        sections: List[Dict[str, str]] = []
+        for idx, heading in enumerate(headings):
+            current_pat = re.compile(rf"^\s*##\s+{re.escape(heading)}\s*$", re.MULTILINE)
+            next_heading = headings[idx + 1] if idx + 1 < len(headings) else None
+            current_match = current_pat.search(answer_text)
+            if not current_match:
+                sections.append({"name": heading, "content": ""})
+                continue
+
+            start = current_match.end()
+            if next_heading:
+                next_pat = re.compile(rf"^\s*##\s+{re.escape(next_heading)}\s*$", re.MULTILINE)
+                next_match = next_pat.search(answer_text, pos=start)
+                end = next_match.start() if next_match else len(answer_text)
+            else:
+                end = len(answer_text)
+
+            sections.append({"name": heading, "content": answer_text[start:end].strip()})
+
+        return sections
     
